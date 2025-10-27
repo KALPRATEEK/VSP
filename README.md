@@ -3,24 +3,6 @@
 **Module:** Distributed Systems  
 **Team:** Elias Schmidt, Rodrigo Morales, Prateek Kalra, Mario Hansen  
 
-## Technical Constraints
-- **Programming Language:** Java 
-- **IDE:** IntelliJ IDEA  
-- **Containerization:** Docker  
-- **Communication:** TCP/IP between containers  
-- **Version Control & Documentation:** GitHub (Markdown structure)  
-
-## Methodological Constraints
-- Development approach based on **Scrum**, with weekly iterations on thursdays  (sprints)  
-- Documentation is maintained **parallel** with implementation (“Living Documentation”)  
-
----
-
-## Organizational Constraints
-- Communication through **weekly meetings** (planning and review)  
-- Task coordination managed via **GitHub Issues**  
-
-
 ### Weekly Report Schedule
 
 | Report Period        | Submission Deadline          | Responsible Person | Status |
