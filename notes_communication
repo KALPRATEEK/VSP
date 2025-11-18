@@ -1,0 +1,124 @@
+6.2 
+
+Runtime Scenario UC-01 — Initialize Network
+
+This describes the dynamic behavior visualized in your sequence diagram.
+
+Purpose
+
+Create a new simulation with a chosen topology (ring, grid, random), allocate N nodes, and register the simulation for further use (UC-02…UC-10).
+
+Participating Components
+UI (Config & Control View)
+SimulationControlService
+SimulationManagement (Registry + Context)
+SimulationCore (Engine + Nodes)
+
+Remarks
+The entire interaction is synchronous until the engine is created. After engine creation, all further behavior becomes event-driven.
+No nodes communicate yet; MessagingPort is idle until UC-03 (Start Simulation).
+No metrics exist yet; visualization only shows the static topology.
+
+
+-------------------------------------
+
+
+6.3 Runtime Scenario UC-03 — Start Simulation
+Once the network is initialized and an algorithm is selected
+
+Notable Properties
+
+Fully asynchronous
+No blocking calls
+Event-driven execution
+UI responsiveness unaffected by simulation load
+
+------------------------------------------------------------
+
+
+Runtime Scenario UC-04 — Pause / Resume Simulation
+(not mentioned in doc)
+Pause
+UI → SimulationControlService: pauseSimulation(id)
+ControlService → Engine: dispatch Pause event
+Nodes stop processing new incoming messages (event loop suspended)
+Metrics/visualization continue to operate on the frozen state
+
+Resume
+UI → ControlService: resumeSimulation(id)
+Engine resumes message processing
+Nodes continue algorithm execution
+
+
+
+----------------------------------------------------------
+
+
+6.5 Runtime Scenario UC-05 — Stop Simulation
+UI → ControlService: stopSimulation(id)
+Engine receives Stop event
+Nodes finish remaining steps and shut down cleanly
+Final metrics snapshot is produced
+Visualization switches to “final” mode
+
+---------------------------------------------------
+
+6.6 Runtime Scenario UC-06 — Visualization
+Triggered whenever SimulationEvents are emitted by nodes.
+Flow
+Node → EventBus: SimulationEvent(type, nodeId, ...)
+Visualization module receives event
+Visualization → UI: push update via WebSocket
+UI updates the rendered graph in <200ms (Quality SC9 & SC11)
+
+
+---------------------------------------------------------
+6.7 Runtime Scenario UC-07 — View Metrics
+
+UI → SimulationControlService: getMetrics(simId)
+ControlService → MetricsCollector
+Metrics returned synchronously (snapshot)
+UI displays charts/numbers
+Metrics are computed continuously via event listeners and do not affect node timing.
+
+------------------------------------------------------
+6.8 Runtime Scenario UC-08 — Save / Load Configuration
+Save
+UI → ControlService: getCurrentConfig(simId)
+Control returns DTO SimulationConfig
+UI writes file (JSON/TXT)
+
+Load
+UI loads file → ControlService: loadConfig(config)
+SimulationManagement creates new Simulation+Engine
+UI receives new SimulationId
+
+-----------------------------------------------------
+6.9 Runtime Scenario UC-09 — Export Run Data
+UI → ControlService: exportRunData(simId, format)
+ControlService collects events/metrics from EventBus archives
+Returns byte[] to UI for saving
+
+-------------------------------------------------------------
+
+6.10 Runtime Scenario UC-10 — View Errors/Logs
+UI → ControlService: getLogs(simId, filter)
+Logs returned synchronously
+UI displays them (no side effects)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
