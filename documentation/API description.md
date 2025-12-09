@@ -358,6 +358,119 @@ public interface SimulationEventPublisher {
   - **Openness:** additional observers (e.g. new analysis tools) can subscribe without modifying the core.  
   - **Scalability:** event handling can be scaled or adapted in the publisher implementation without touching the simulation engine.
 
+
+## 1.5 SimulationEventBus and SimulationEventListener
+
+To support logging, metrics, and visualization, the simulation backend uses an event bus.  
+It extends the existing write-side publisher (`SimulationEventPublisher`) with subscription capabilities.
+
+```java
+public interface SimulationEventListener {
+    void onEvent(SimulationEvent event);
+}
+
+public interface SimulationEventBus extends SimulationEventPublisher {
+
+    void subscribe(EventType type, SimulationEventListener listener);
+
+    void unsubscribe(EventType type, SimulationEventListener listener);
+}
+```
+
+### Reasoning
+
+- **Functional Requirements**  
+  - Components such as logging, metrics, and visualization must receive simulation events.  
+  - Different consumers may need different event types.
+
+- **Technical Context**  
+  - The bus operates inside the backend (in-process), receiving events from the simulation engine.  
+  - Fan-out is handled within the backend, not by the simulation nodes.
+
+- **Quality Goals**  
+  - **Transparency**: Every relevant event becomes observable.  
+  - **Openness**: New listeners (e.g., additional visualization tools) can subscribe without modifying the core.  
+  - **Scalability**: Event fan-out supports multiple observers efficiently.  
+  - **Distribution Transparency**: Event consumers do not care where the event originated (local JVM or external container).
+
+---
+
+## 1.6 Core Domain Interfaces: Node, NodeContext, NodeAlgorithm
+
+These interfaces describe how the simulation engine interacts with nodes, and how nodes delegate behavior to algorithms.
+
+```java
+public interface Node {
+
+    void onStart();
+
+    void onMessage(NodeContext context, SimulationMessage message);
+}
+
+public interface NodeContext {
+
+    NodeId self();
+
+    Set<NodeId> neighbors();
+
+    void send(NodeId target, SimulationMessage message);
+
+    void broadcast(Set<NodeId> targets, SimulationMessage message);
+}
+
+public interface NodeAlgorithm {
+
+    void onStart(NodeContext context);
+
+    void onMessage(NodeContext context, SimulationMessage message);
+}
+```
+
+### Reasoning – Node
+
+- **Functional Requirements**  
+  - The simulation engine must initialize nodes and deliver incoming messages to them.
+
+- **Technical Context**  
+  - Nodes are wired to the networking layer through `MessagingPort` and are controlled by the engine.
+
+- **Quality Goals**  
+  - **Correctness**: A clear node lifecycle (`onStart`, `onMessage`) ensures predictable behavior.  
+  - **Usability**: Algorithm implementers interact with a simple, well-defined interface.
+
+---
+
+### Reasoning – NodeContext
+
+- **Functional Requirements**  
+  - Algorithms need messaging capability, node identity, and neighbor information.
+
+- **Technical Context**  
+  - `NodeContext` abstracts underlying transports (UDP, in-memory, etc.).
+
+- **Quality Goals**  
+  - **Distribution Transparency**: Algorithms never depend on transport details.  
+  - **Shared Resources**: Network resources are accessed via a controlled abstraction.  
+  - **Usability**: Convenient access to id, neighbors, and messaging operations.
+
+---
+
+### Reasoning – NodeAlgorithm
+
+- **Functional Requirements**  
+  - Algorithms must be replaceable without modifying the engine or node infrastructure.
+
+- **Technical Context**  
+  - Algorithm instances run inside nodes and use `NodeContext` for all interactions.
+
+- **Quality Goals**  
+  - **Openness**: New algorithms can be added by simply implementing this interface.  
+  - **Correctness**: The engine guarantees a consistent lifecycle (`onStart` before messages).  
+  - **Scalability**: Many nodes running the same algorithm can be managed efficiently.
+
+---
+
+
 ---
 
 # 2. Middleware Layer Interfaces
