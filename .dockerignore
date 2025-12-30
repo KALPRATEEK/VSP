@@ -1,0 +1,25 @@
+# Build artifacts
+target/
+
+# IDE
+.idea/
+*.iml
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+documentation/
+
+# GitHub
+.github/
+
