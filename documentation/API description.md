@@ -1,46 +1,56 @@
-
 # Simulation API
 
-This document describes the core programmatic interfaces for controlling and observing the distributed consensus simulation.
+> **Purpose**  
+> This API specification describes all public interfaces of the distributed simulation backend.  
+> Function signatures are derived from:
+>
+> - **Functional requirements**  
+> - The **technical context** (Browser ↔ Backend, async, Docker, P2P nodes)  
+> - The project’s **quality goals**:
+>   - Correctness  
+>   - Scalability  
+>   - Transparency  
+>   - Openness  
+>   - Shared Resources  
+>   - Distribution Transparency  
+>   - Usability
+>
 
-We distinguish between:
-
-- **Application Layer** interfaces: `SimulationControl`, `VisualizationListener`, `SimulationEngine`, `SimulationEventPublisher`
-- **Middleware Layer** interfaces: `MessagingPort`
-
-The structure of this document follows that separation.
 
 ---
 
-## 0. Shared Domain Types
+# 0. Shared Domain Types
 
-These records and types are used by multiple interfaces across the application.
+These domain records are shared across the application and middleware layers.  
+They are shaped by requirements like “configure a network”, “run simulations with parameters”,  
+and by quality goals such as **Correctness**, **Transparency**, **Scalability**, and **Usability**.
 
-### 0.1 `NetworkConfig`
+---
+
+## 0.1 `NetworkConfig`
 
 ```java
-/**
- * Configuration for the initial network generation.
- * Defines how many nodes are created and which topology is used.
- */
 public record NetworkConfig(
         int nodeCount,
         TopologyType topologyType
 ) { }
 ```
 
-- **`nodeCount`** – number of nodes to create.  
-- **`topologyType`** – type of network topology (e.g. LINE, RING, GRID, RANDOM, …).
+### Reasoning  
+- **Functional requirements:**  
+  Users must be able to define *how many nodes* the network has and *which topology* (line, ring, grid, random, …) is used.  
+- **Technical context:**  
+  Exchanged via HTTP/JSON between UI and backend → immutable record with primitive fields is ideal for serialization.  
+- **Quality goals:**  
+  - **Correctness:** network structure is explicitly defined and checked against constraints.  
+  - **Transparency:** the effective topology is visible and inspectable as a simple DTO.  
+  - **Usability:** a single, simple type encapsulates all topology-relevant parameters.
 
 ---
 
-### 0.2 `SimulationParameters`
+## 0.2 `SimulationParameters`
 
 ```java
-/**
- * Parameters for a concrete simulation run.
- * These influence randomness, runtime limits and artificial message delay.
- */
 public record SimulationParameters(
         long randomSeed,
         int maxSteps,
@@ -48,19 +58,22 @@ public record SimulationParameters(
 ) { }
 ```
 
-- **`randomSeed`** – seed for reproducibility of runs.  
-- **`maxSteps`** – maximum number of simulation steps.  
-- **`messageDelayMillis`** – (simulated) delay per message in milliseconds.
+### Reasoning  
+- **Functional requirements:**  
+  A simulation run must be configurable with respect to randomness, number of steps and artificial delays.  
+- **Technical context:**  
+  Parameters are provided once at start via a REST call; the engine then runs asynchronously.  
+- **Quality goals:**  
+  - **Correctness:** limiting `maxSteps` helps avoid uncontrolled or inconsistent simulation states.  
+  - **Scalability:** `maxSteps` and delays support controlling resource usage across many runs.  
+  - **Transparency:** explicit parameters make the behavior of a run understandable.  
+  - **Usability:** all core run parameters are grouped in one structure that is easy to use from the UI.
 
 ---
 
-### 0.3 `MetricsSnapshot`
+## 0.3 `MetricsSnapshot`
 
 ```java
-/**
- * Aggregated metrics of a simulation run.
- * Represents a read-only snapshot at a given point in time.
- */
 public record MetricsSnapshot(
         long simulatedTime,
         long realTimeMillis,
@@ -68,25 +81,24 @@ public record MetricsSnapshot(
         long rounds,
         boolean converged,
         String leaderId
-) { }
+) {}
 ```
 
-- **`simulatedTime`** – simulated time (e.g. step / round).  
-- **`realTimeMillis`** – real execution time in milliseconds.  
-- **`messageCount`** – number of messages sent.  
-- **`rounds`** – number of completed rounds (algorithm-specific).  
-- **`converged`** – `true` if the algorithm has converged.  
-- **`leaderId`** – ID of the elected leader (if applicable), otherwise `null`.
+### Reasoning  
+- **Functional requirements:**  
+  The system must report progress and outcomes of consensus/election algorithms (e.g. convergence, message counts, elected leader).  
+- **Technical context:**  
+  Used by a metrics view that periodically polls the backend via HTTP.  
+- **Quality goals:**  
+  - **Transparency:** makes algorithm behavior and resource usage observable.  
+  - **Scalability:** compact snapshots can be fetched frequently without overloading the system.  
+  - **Usability:** provides a clear, aggregated view for teaching and analysis.
 
 ---
 
-### 0.4 `SimulationConfig`
+## 0.4 `SimulationConfig`
 
 ```java
-/**
- * Configuration of a simulation session (for save / load).
- * Captures network topology, algorithm choice and default parameters.
- */
 public record SimulationConfig(
         NetworkConfig networkConfig,
         AlgorithmId algorithmId,
@@ -94,429 +106,428 @@ public record SimulationConfig(
 ) { }
 ```
 
-- **`networkConfig`** – topology and node count.  
-- **`algorithmId`** – identifier of the consensus/election algorithm.  
-- **`defaultParameters`** – default run parameters for this simulation session.
+### Reasoning  
+- **Functional requirements:**  
+  Users must be able to save a configured scenario (network + algorithm + parameters) and reload it later.  
+- **Technical context:**  
+  Serialized to/from JSON or files; used in HTTP APIs and possibly simple local storage.  
+- **Quality goals:**  
+  - **Transparency:** the complete configuration of a scenario is visible as a single DTO.  
+  - **Openness:** scenarios can be exchanged or versioned using this stable format.  
+  - **Usability:** simplifies saving/loading workflows by bundling all relevant data.
 
 ---
 
-### 0.5 `SimulationEvent`
+## 0.5 `SimulationEvent`
 
 ```java
-/**
- * Visualisation / observation event used for live updates.
- * Emitted by the simulation core and consumed by Observation & Analysis.
- */
 public record SimulationEvent(
         long timestamp,
-        String type,          // e.g. "MESSAGE_SENT", "MESSAGE_RECEIVED", "STATE_CHANGED", ...
+        String type,
         String nodeId,
         String peerId,
         String payloadSummary
 ) { }
 ```
 
-- **`timestamp`** – timestamp (simulated or real) of the event.  
-- **`type`** – event type (e.g. "MESSAGE_SENT", "STATE_CHANGED", "LEADER_ELECTED").  
-- **`nodeId`** – affected node.  
-- **`peerId`** – peer node (e.g. sender/receiver), may be `null`.  
-- **`payloadSummary`** – short, UI-friendly summary of the event payload.
+### Reasoning  
+- **Functional requirements:**  
+  The system must emit events for visualization, logging, and analysis (e.g. messages sent, state changes).  
+- **Technical context:**  
+  Events are pushed to observers (e.g. WebSocket, logging, metrics) via an internal event bus.  
+- **Quality goals:**  
+  - **Transparency:** event streams provide insight into the dynamic behavior of the system.  
+  - **Distribution Transparency:** consumer components (e.g. UI) see a uniform event representation, independent of where the event originated.  
+  - **Usability:** `payloadSummary` is intentionally short and UI-friendly, making events easy to render and interpret.
 
 ---
 
-## 1. Application Layer Interfaces
+# 1. Application Layer Interfaces
 
-This section covers all interfaces that belong to the **application layer**:  
-`SimulationControl`, `VisualizationListener`, `SimulationEngine`, `SimulationEventPublisher`.
+The application layer exposes the core **capabilities** of the simulation system.  
+Interfaces are derived from functional needs (configure, execute, observe),  
+the technical context (browser-based UI via HTTP + optional WebSocket),  
+and the project’s quality goals: particularly **Correctness**, **Scalability**, **Transparency**, and **Usability**.
 
 ---
 
-### 1.1 Interface: `SimulationControl`
+## 1.1 `SimulationControl`
 
-The `SimulationControl` interface is the **use-case façade** between the User Interface  
-(Config & Control View, Metrics View, Visualisation View, Logs View) and the internal simulation.
-
-It is **use-case-oriented** and UI-framework-agnostic.
+`SimulationControl` is the **use-case façade** between the UI (config, control, metrics, visualization, logs)  
+and the internal simulation core. It is **UI-framework-agnostic** and designed around coarse-grained capabilities,  
+not single UI button clicks.
 
 ```java
 public interface SimulationControl {
 
-    // UC-01: Initialize Network
+    // --- Capability: Create / Initialize a Simulation ---
 
-    /**
-     * Creates a new simulation with N nodes and the selected topology.
-     * Node IDs and edges are assigned according to the NetworkConfig.
-     *
-     * @param config network configuration (number of nodes, topology)
-     * @return a new SimulationId identifying this simulation session
-     */
     SimulationId initializeNetwork(NetworkConfig config);
 
-    // UC-02: Select Algorithm
-
-    /**
-     * Selects the active algorithm (e.g. "max-id-flooding") for this simulation.
-     * Internally uses an AlgorithmFactory to instantiate the strategy.
-     *
-     * @param simulationId the target simulation session
-     * @param algorithmId  identifier of the algorithm implementation
-     */
     void selectAlgorithm(SimulationId simulationId, AlgorithmId algorithmId);
 
-    // UC-03: Start Simulation
+    // --- Capability: Execution Control (asynchronous) ---
 
-    /**
-     * Starts the simulation asynchronously.
-     * Returns immediately; execution is event-driven.
-     *
-     * @param simulationId the simulation to start
-     * @param parameters   run parameters (seed, max steps, delays, ...)
-     */
     void startSimulation(SimulationId simulationId, SimulationParameters parameters);
 
-    // UC-04.1: Pause Simulation
-
-    /**
-     * Puts the simulation into a paused state without losing its internal state.
-     *
-     * @param simulationId the simulation to pause
-     */
     void pauseSimulation(SimulationId simulationId);
 
-    // UC-04.2: Resume Simulation
-
-    /**
-     * Resumes a paused simulation.
-     *
-     * @param simulationId the simulation to resume
-     */
     void resumeSimulation(SimulationId simulationId);
 
-    // UC-05: Stop Simulation
-
-    /**
-     * Stops the simulation in a controlled manner.
-     * The final state is preserved for metrics and export.
-     *
-     * @param simulationId the simulation to stop
-     */
     void stopSimulation(SimulationId simulationId);
 
-    // UC-06: Inspect Visualisation
+    // --- Capability: Visualization / State Observation ---
 
-    /**
-     * Provides a consistent snapshot of the current visualisation data.
-     * Intended for polling by the UI.
-     *
-     * @param simulationId the target simulation
-     * @return a snapshot suitable for rendering in the visualisation view
-     */
     VisualizationSnapshot getCurrentVisualization(SimulationId simulationId);
 
-    /**
-     * Optional: Live stream of events (e.g. for WebSocket / observer pattern).
-     * The concrete implementation may use reactive streams, callbacks, etc.
-     *
-     * @param simulationId the target simulation
-     * @param listener     callback for streaming visualisation events
-     */
-    void registerVisualizationListener(SimulationId simulationId, VisualizationListener listener);
+    void registerVisualizationListener(
+            SimulationId simulationId,
+            VisualizationListener listener
+    );
 
-    // UC-07: View Metrics
+    // --- Capability: Metrics ---
 
-    /**
-     * Returns aggregated metrics for the current or most recent run.
-     *
-     * @param simulationId the target simulation
-     * @return aggregated metrics snapshot
-     */
     MetricsSnapshot getMetrics(SimulationId simulationId);
 
-    // UC-08.1: Save Configuration
+    // --- Capability: Save / Load / Export ---
 
-    /**
-     * Returns the current simulation configuration (topology, algorithm, default parameters).
-     * The UI or adapter decides how and where this data is stored.
-     *
-     * @param simulationId the target simulation
-     * @return configuration that can be serialized and later re-loaded
-     */
     SimulationConfig getCurrentConfig(SimulationId simulationId);
 
-    // UC-08.2: Load Configuration
-
-    /**
-     * Creates a new simulation from a previously saved configuration.
-     * Returns a new SimulationId.
-     *
-     * @param config a previously stored simulation configuration
-     * @return a new SimulationId representing the loaded simulation
-     */
     SimulationId loadConfig(SimulationConfig config);
 
-    // UC-09: Export Run Data
-
-    /**
-     * Exports the events and/or metrics of a run into a chosen format.
-     * The return value may be written to a file by the UI.
-     *
-     * @param simulationId the target simulation
-     * @param format       export format (e.g. CSV, JSON, ...)
-     * @return binary representation of the export (e.g. file content)
-     */
     byte[] exportRunData(SimulationId simulationId, ExportFormat format);
 
-    // UC-10: View Errors / Logs
+    // --- Capability: Logs (intentionally simple) ---
 
-    /**
-     * Returns log entries for the simulation, filtered by level and/or time range.
-     *
-     * @param simulationId the target simulation
-     * @param filter       filter for log level, time range etc.
-     * @return list of log entries matching the filter
-     */
     List getLogs(SimulationId simulationId, LogFilter filter);
 }
 ```
 
-#### 1.1.1 Typical Usage by UI Components
+### Reasoning – Create / Initialize
 
-- **Config & Control View**
-  - `initializeNetwork(...)`
-  - `selectAlgorithm(...)`
-  - `startSimulation(...)`
-  - `pauseSimulation(...)`
-  - `resumeSimulation(...)`
-  - `stopSimulation(...)`
-  - `getCurrentConfig(...)`
-  - `loadConfig(...)`
-  - `exportRunData(...)`
+- **Functional requirements:**  
+  - Create a simulation with a given network topology and node count.  
+  - Choose which consensus/election algorithm will be used.  
+- **Technical context:**  
+  - Stateless HTTP: the backend must keep simulation state addressed via `SimulationId`, not via UI session state.  
+  - Multiple simulations may exist in parallel.  
+- **Quality goals:**  
+  - **Correctness:** explicit configuration objects help validate that simulations are created with valid parameters.  
+  - **Transparency:** the chosen network and algorithm are clearly represented and can be inspected or logged.  
+  - **Usability:** provides a straightforward, high-level API for the UI to set up simulations.
 
-- **Metrics View**
-  - `getMetrics(...)`
+### Reasoning – Execution Control (Start / Pause / Resume / Stop)
 
-- **Visualisation View**
-  - `getCurrentVisualization(...)`
-  - `registerVisualizationListener(...)`
+- **Functional requirements:**  
+  - Start, pause, resume, and stop simulations without losing internal state.  
+- **Technical context:**  
+  - Browser/REST: requests must complete quickly; the simulation itself may run for many steps in the background.  
+- **Quality goals:**  
+  - **Scalability:** asynchronous control allows multiple simulations and users to be handled concurrently.  
+  - **Correctness:** explicit lifecycle operations make simulation states (running, paused, stopped) easier to manage and reason about.  
+  - **Usability:** UI commands map cleanly to these lifecycle methods.
 
-- **Logs View**
-  - `getLogs(...)`
+### Reasoning – Visualization / State Observation
+
+- **Functional requirements:**  
+  - UI needs the current state of the simulation for rendering and may want live updates.  
+- **Technical context:**  
+  - REST polling (`getCurrentVisualization`) and WebSocket/event-based push (`registerVisualizationListener`).  
+- **Quality goals:**  
+  - **Transparency:** snapshots and events make internal state and evolution of the simulation visible.  
+  - **Distribution Transparency:** the UI receives a unified view, independent of whether nodes are local or in separate containers.  
+  - **Usability:** supports both simple polling-based UIs and more advanced live visualizations.
+
+### Reasoning – Metrics
+
+- **Functional requirements:**  
+  - Display aggregated metrics for simulations (messages, rounds, runtime, convergence, leader).  
+- **Technical context:**  
+  - Metrics view typically pulls data at low frequency via HTTP.  
+- **Quality goals:**  
+  - **Transparency:** exposes measurable data about the simulation’s behavior.  
+  - **Scalability:** aggregated metrics are compact, so multiple simulations can be monitored without overwhelming the system.
+
+### Reasoning – Save / Load / Export
+
+- **Functional requirements:**  
+  - Save and reload simulation configurations.  
+  - Export run data for external inspection or grading.  
+- **Technical context:**  
+  - Backend prepares configuration and export data; the UI decides where and how to store it.  
+- **Quality goals:**  
+  - **Openness:** data formats (config and exports) are suitable for use in external tools or further processing.  
+  - **Transparency:** exported data and configurations make simulation runs auditable.  
+  - **Usability:** high-level operations (`getCurrentConfig`, `loadConfig`, `exportRunData`) simplify UI implementation.
+
+### Reasoning – Logs
+
+- **Functional requirements:**  
+  - Provide access to log entries of a simulation for debugging and teaching.  
+- **Technical context:**  
+  - Simple log view in the browser, no heavy log infrastructure.  
+- **Quality goals:**  
+  - **Transparency:** logs make internal events and error conditions visible.  
+  - **Usability:** a straightforward `getLogs` call is easy to integrate into a UI.
 
 ---
 
-### 1.2 Interface: `VisualizationListener`
+## 1.2 `VisualizationListener`
 
-`VisualizationListener` defines the **callback interface** for components that react to live events from the simulation (e.g. visualisation, UI models).
+`VisualizationListener` defines the callback interface for components that want to react to live simulation events  
+(e.g. visualization, live metrics, UI models).
 
 ```java
-/**
- * Listener for visualisation events.
- * Implemented by components that update the UI model / view.
- */
 public interface VisualizationListener {
-
-    /**
-     * Called whenever a new SimulationEvent is emitted by the core.
-     *
-     * @param event the emitted simulation event
-     */
     void onEvent(SimulationEvent event);
 }
 ```
 
-#### 1.2.1 Role in the System
+### Reasoning  
 
-- Used by **SimulationControl** and/or the underlying infrastructure to push live updates (e.g. via WebSocket) to the UI.  
-- Typically wired into an internal EventBus or directly into observers in the **Observation & Analysis** layer.
+- **Functional requirements:**  
+  - Visualization and monitoring components must react to new events as they occur.  
+- **Technical context:**  
+  - Used in combination with an internal event bus and optional WebSocket adapters to propagate events to the browser.  
+- **Quality goals:**  
+  - **Transparency:** each event becomes visible to interested observers.  
+  - **Distribution Transparency:** listeners do not need to know where the event originated in the distributed system.  
+  - **Usability:** simple callback interface allows easy integration of different kinds of observers.
 
 ---
 
-### 1.3 Interface: `SimulationEngine`
+## 1.3 `SimulationEngine`
 
-`SimulationEngine` encapsulates the **core execution** of a single simulation instance in the application layer’s Simulation Core.  
-It is typically used by a `SimulationContext` or Simulation Management component.
+`SimulationEngine` encapsulates the execution of a **single simulation instance** in the application layer.  
+It is typically managed by some Simulation Management/Context component and stays independent of UI details.
 
 ```java
-/**
- * Core abstraction for running a single simulation instance.
- * Responsible for creating nodes, wiring the network and controlling
- * the lifecycle of the simulation.
- */
 public interface SimulationEngine {
 
-    /**
-     * Creates all nodes and network connections according to the given config.
-     *
-     * @param config network configuration (number of nodes, topology)
-     */
     void createEngineAndNodes(NetworkConfig config);
 
-    /**
-     * Configures or replaces the active election / consensus algorithm.
-     * Usually delegates to an AlgorithmFactory and configures all nodes.
-     *
-     * @param algorithmId identifier of the algorithm implementation
-     */
     void configureAlgorithm(AlgorithmId algorithmId);
 
-    /**
-     * Starts the simulation run with the given parameters.
-     * Should be non-blocking and event-driven.
-     *
-     * @param parameters run parameters (seed, max steps, delays, ...)
-     */
     void startSimulation(SimulationParameters parameters);
 
-    /**
-     * Pauses the current simulation without losing internal state.
-     */
     void pauseSimulation();
 
-    /**
-     * Resumes a previously paused simulation.
-     */
     void resumeSimulation();
 
-    /**
-     * Stops the simulation in a controlled manner and preserves final state.
-     */
     void stopSimulation();
 
-    /**
-     * Injects the publisher used to emit SimulationEvents
-     * towards the Observation & Analysis layer.
-     *
-     * @param eventPublisher publisher for simulation events
-     */
     void setEventPublisher(SimulationEventPublisher eventPublisher);
 }
 ```
 
-#### 1.3.1 Collaboration with Other Components
+### Reasoning  
 
-- Called by **SimulationContext** or **SimulationManagement** to:
-  - set up the network and nodes,
-  - configure the algorithm,
-  - start / pause / resume / stop a run.
-- Uses **`SimulationEventPublisher`** to publish `SimulationEvent`s that are consumed by metrics, logging and visualisation components.
+- **Functional requirements:**  
+  - Create nodes and network structure according to a configuration.  
+  - Configure or replace the current algorithm.  
+  - Control the lifecycle of the simulation (start, pause, resume, stop).  
+- **Technical context:**  
+  - Nodes may run via in-memory messaging or via UDP across containers, but the engine’s control interface stays the same.  
+- **Quality goals:**  
+  - **Distribution Transparency:** the engine API hides whether nodes run in the same process, separate containers, or elsewhere.  
+  - **Correctness:** clear lifecycle methods help keep simulation state transitions well-defined.  
+  - **Scalability:** engines can be instantiated per simulation, supporting multiple concurrent runs.  
+  - **Transparency:** hooking a `SimulationEventPublisher` into the engine exposes internal behavior without changing core logic.
 
 ---
 
-### 1.4 Interface: `SimulationEventPublisher`
+## 1.4 `SimulationEventPublisher`
 
-`SimulationEventPublisher` is the **abstraction of the event channel** from the Simulation Core to the Observation & Analysis layer (EventBus, Metrics, Logging, Visualisation).
+`SimulationEventPublisher` abstracts the event channel from the simulation core to the Observation & Analysis layer.  
+Typical implementations will fan out events to visualization, metrics, and logging.
 
 ```java
-/**
- * Abstraction for publishing simulation events from the Simulation Core
- * to the Observation & Analysis layer.
- *
- * Typical implementations use an internal EventBus and fan-out to
- * components like Metrics, Logging and Visualisation.
- */
 public interface SimulationEventPublisher {
-
-    /**
-     * Publishes a single simulation event.
-     * Implementations are responsible for dispatching the event to all
-     * registered listeners / observers.
-     *
-     * @param event the simulation event to publish
-     */
     void publish(SimulationEvent event);
 }
 ```
 
-#### 1.4.1 Typical Implementation
+### Reasoning  
 
-- Internally, an **EventBus** may be used to notify:
-  - `VisualizationListener` instances,  
-  - metrics aggregators,  
-  - logging components.  
-- `SimulationEngine` and/or individual `Node` instances call `publish(...)` to report:
-  - message sends/receives,  
-  - state changes,  
-  - algorithm-specific events (e.g. leader elected).
+- **Functional requirements:**  
+  - All relevant simulation events must reach observers (visualization, metrics, logging).  
+- **Technical context:**  
+  - Implementations may be an in-process event bus or other dispatch mechanisms.  
+- **Quality goals:**  
+  - **Transparency:** ensures that state changes and message flows are observable.  
+  - **Openness:** additional observers (e.g. new analysis tools) can subscribe without modifying the core.  
+  - **Scalability:** event handling can be scaled or adapted in the publisher implementation without touching the simulation engine.
 
----
 
-## 2. Middleware Layer Interfaces
+## 1.5 SimulationEventBus and SimulationEventListener
 
-This section covers the interfaces that belong to the **middleware** and abstract the underlying communication mechanisms.
-
----
-
-### 2.1 Interface: `MessagingPort`
-
-`MessagingPort` abstracts the **underlying message transport** between nodes (e.g. UDP, TCP, Docker networking), so that node logic does not depend on a concrete transport technology.
+To support logging, metrics, and visualization, the simulation backend uses an event bus.  
+It extends the existing write-side publisher (`SimulationEventPublisher`) with subscription capabilities.
 
 ```java
-/**
- * Abstraction of the message transport between nodes.
- * Used by nodes to send and receive messages without depending on
- * concrete networking technology (UDP, TCP, Docker, ...).
- */
+public interface SimulationEventListener {
+    void onEvent(SimulationEvent event);
+}
+
+public interface SimulationEventBus extends SimulationEventPublisher {
+
+    void subscribe(EventType type, SimulationEventListener listener);
+
+    void unsubscribe(EventType type, SimulationEventListener listener);
+}
+```
+
+### Reasoning
+
+- **Functional Requirements**  
+  - Components such as logging, metrics, and visualization must receive simulation events.  
+  - Different consumers may need different event types.
+
+- **Technical Context**  
+  - The bus operates inside the backend (in-process), receiving events from the simulation engine.  
+  - Fan-out is handled within the backend, not by the simulation nodes.
+
+- **Quality Goals**  
+  - **Transparency**: Every relevant event becomes observable.  
+  - **Openness**: New listeners (e.g., additional visualization tools) can subscribe without modifying the core.  
+  - **Scalability**: Event fan-out supports multiple observers efficiently.  
+  - **Distribution Transparency**: Event consumers do not care where the event originated (local JVM or external container).
+
+---
+
+## 1.6 Core Domain Interfaces: Node, NodeContext, NodeAlgorithm
+
+These interfaces describe how the simulation engine interacts with nodes, and how nodes delegate behavior to algorithms.
+
+```java
+public interface Node {
+
+    void onStart();
+
+    void onMessage(NodeContext context, SimulationMessage message);
+}
+
+public interface NodeContext {
+
+    NodeId self();
+
+    Set<NodeId> neighbors();
+
+    void send(NodeId target, SimulationMessage message);
+
+    void broadcast(Set<NodeId> targets, SimulationMessage message);
+}
+
+public interface NodeAlgorithm {
+
+    void onStart(NodeContext context);
+
+    void onMessage(NodeContext context, SimulationMessage message);
+}
+```
+
+### Reasoning – Node
+
+- **Functional Requirements**  
+  - The simulation engine must initialize nodes and deliver incoming messages to them.
+
+- **Technical Context**  
+  - Nodes are wired to the networking layer through `MessagingPort` and are controlled by the engine.
+
+- **Quality Goals**  
+  - **Correctness**: A clear node lifecycle (`onStart`, `onMessage`) ensures predictable behavior.  
+  - **Usability**: Algorithm implementers interact with a simple, well-defined interface.
+
+---
+
+### Reasoning – NodeContext
+
+- **Functional Requirements**  
+  - Algorithms need messaging capability, node identity, and neighbor information.
+
+- **Technical Context**  
+  - `NodeContext` abstracts underlying transports (UDP, in-memory, etc.).
+
+- **Quality Goals**  
+  - **Distribution Transparency**: Algorithms never depend on transport details.  
+  - **Shared Resources**: Network resources are accessed via a controlled abstraction.  
+  - **Usability**: Convenient access to id, neighbors, and messaging operations.
+
+---
+
+### Reasoning – NodeAlgorithm
+
+- **Functional Requirements**  
+  - Algorithms must be replaceable without modifying the engine or node infrastructure.
+
+- **Technical Context**  
+  - Algorithm instances run inside nodes and use `NodeContext` for all interactions.
+
+- **Quality Goals**  
+  - **Openness**: New algorithms can be added by simply implementing this interface.  
+  - **Correctness**: The engine guarantees a consistent lifecycle (`onStart` before messages).  
+  - **Scalability**: Many nodes running the same algorithm can be managed efficiently.
+
+---
+
+
+---
+
+# 2. Middleware Layer Interfaces
+
+The middleware layer abstracts the underlying communication mechanisms between nodes.  
+It reflects the P2P architecture, the usage of Docker/UDP and a focus on keeping node logic independent  
+of low-level networking APIs.
+
+---
+
+## 2.1 `MessagingPort`
+
+`MessagingPort` abstracts the transport channel for node-to-node communication.  
+Node logic depends only on this interface and not on concrete networking details (UDP, TCP, in-memory).
+
+```java
 public interface MessagingPort {
 
-    /**
-     * Sends a message to a single receiver node.
-     *
-     * @param receiver the target node
-     * @param message  the message to send
-     */
     void send(NodeId receiver, SimulationMessage message);
 
-    /**
-     * Sends the same message to a set of receiver nodes.
-     *
-     * @param receivers target nodes
-     * @param message   the message to send
-     */
     void broadcast(Set<NodeId> receivers, SimulationMessage message);
 
-    /**
-     * Registers a handler that will be invoked for incoming messages
-     * of the given node.
-     *
-     * @param nodeId  the node for which messages should be delivered
-     * @param handler callback to handle incoming messages
-     */
     void registerHandler(NodeId nodeId, MessageHandler handler);
 
-    /**
-     * Unregisters the message handler for the given node.
-     *
-     * @param nodeId the node whose handler should be removed
-     */
     void unregisterHandler(NodeId nodeId);
 }
 ```
 
-Typical associated types (to be defined in your codebase):
+### Reasoning  
 
-```java
-// Identifier of a node in the network.
-public record NodeId(String value) { }
-
-// Message payload exchanged between nodes.
-public interface SimulationMessage { }
-
-// Callback invoked on incoming messages.
-@FunctionalInterface
-public interface MessageHandler {
-    void onMessage(NodeId sender, SimulationMessage message);
-}
-```
+- **Functional requirements:**  
+  - Nodes must be able to send messages to individual peers and sets of neighbors (e.g. flooding protocols).  
+  - Nodes must be able to receive messages via registered handlers.  
+- **Technical context:**  
+  - In the lab, messages are typically transported via UDP in a Docker bridge network, or via an in-memory implementation for tests.  
+- **Quality goals:**  
+  - **Distribution Transparency:** node algorithms work against a uniform messaging interface, regardless of concrete transport.  
+  - **Shared Resources:** enables multiple nodes to share network resources (sockets, ports) behind a controlled abstraction.  
+  - **Scalability:** different implementations (in-memory vs. UDP) allow scaling from simple local tests to many containers.  
+  - **Openness:** new transport mechanisms can be added as further `MessagingPort` implementations without changing core logic.  
 
 ---
 
-With this structure, the API documentation is clearly grouped by layer:
+# 3. Architecture Justification Table
 
-- **Application Layer**
-  - `SimulationControl` – façade to the UI  
-  - `VisualizationListener` – callback interface for visualisation / UI components  
-  - `SimulationEngine` – core execution interface for a single simulation instance  
-  - `SimulationEventPublisher` – event channel from core to observation & analysis  
+The following table summarizes how important API functions result from the combination  
+of **functional requirements**, the **technical context**, and the project’s **quality goals**.
 
-- **Middleware Layer**
-  - `MessagingPort` – transport abstraction for node-to-node messaging
+| Capability / API Function | Functional Requirements | Technical Context | Quality Goals (from project) | Resulting API Shape |
+|---------------------------|-------------------------|-------------------|------------------------------|----------------------|
+| Create Simulation | Create networks, select algorithms | Stateless HTTP/JSON, multiple simulations | Correctness, Transparency, Usability | `initializeNetwork(NetworkConfig)`, `selectAlgorithm(SimulationId, AlgorithmId)` |
+| Start Simulation | Execute with parameters | Browser must return immediately | Scalability, Correctness, Usability | `startSimulation(SimulationId, SimulationParameters)` (non-blocking) |
+| Control Execution | Pause / Resume / Stop | REST control commands | Correctness, Usability | Simple lifecycle methods (`pauseSimulation`, `resumeSimulation`, `stopSimulation`) |
+| Visualization | Show state & live updates | REST + WebSocket / event bus | Transparency, Distribution Transparency, Usability | `getCurrentVisualization` (snapshot) + `registerVisualizationListener` (push) |
+| Metrics | Understand algorithm progress | Pull-based HTTP polling | Transparency, Scalability | Compact `MetricsSnapshot` DTO |
+| Save / Load | Reuse scenarios | JSON/file-based persistence | Openness, Transparency, Usability | `SimulationConfig`, `getCurrentConfig`, `loadConfig` |
+| Export Runs | External analysis | File download, external tools | Openness, Transparency | `byte[] exportRunData(SimulationId, ExportFormat)` |
+| Logs | Debugging, error analysis | Simple REST UI | Transparency, Usability | `getLogs(SimulationId, LogFilter)` kept intentionally simple |
+| P2P Messaging | Node-to-node communication | Docker/UDP/InMemory | Distribution Transparency, Shared Resources, Scalability, Openness | `MessagingPort` with `send`, `broadcast`, handler registration |
+

@@ -11,9 +11,9 @@
 | 05.11.2025 – 23:59 Uhr | Elias              | Submitted |
 | 12.11.2025 – 23:59 Uhr | Rodrigo            | Submitted |
 | 19.11.2025 – 23:59 Uhr | Prateek            | Submitted |
-| 26.11.2025 – 23:59 Uhr | Mario              |           |
-| 03.12.2025 – 23:59 Uhr | Elias              |           |
-| 10.12.2025 – 23:59 Uhr | Rodrigo            |           |
+| 26.11.2025 – 23:59 Uhr | Mario              | Submitted |
+| 03.12.2025 – 23:59 Uhr | Elias              | Submitted |
+| 10.12.2025 – 23:59 Uhr | Rodrigo            | Submitted |
 | 17.12.2025 – 23:59 Uhr | Prateek            |           |
 | 07.01.2026 – 23:59 Uhr | Mario              |           |
 | 14.01.2026 – 23:59 Uhr | Elias              |           |
