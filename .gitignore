@@ -1,0 +1,5 @@
+.idea/
+*.iml
+
+target/
+/documentation/.$application_building block view.drawio.bkp
