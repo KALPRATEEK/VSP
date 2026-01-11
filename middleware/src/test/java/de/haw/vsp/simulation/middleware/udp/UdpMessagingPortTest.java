@@ -9,6 +9,8 @@ import de.haw.vsp.simulation.middleware.codec.JacksonSimulationMessageCodec;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.net.DatagramSocket;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -33,9 +35,8 @@ class UdpMessagingPortTest {
         var a = new NodeId("A");
         var b = new NodeId("B");
 
-        // Choose two ports that are usually free for tests (still may conflict on some machines).
-        int portNumA = 12001;
-        int portNumB = 12002;
+        int portNumA = freeUdpPort();
+        int portNumB = freeUdpPort();
 
         TransportConfig config = new StaticTransportConfig(Map.of(
                 a, new TransportAddress("127.0.0.1", portNumA),
@@ -55,9 +56,7 @@ class UdpMessagingPortTest {
         });
 
         var msg = SimulationMessage.of(
-                a,
-                b,
-                "PING",
+                a, b, "PING",
                 JsonNodeFactory.instance.objectNode().put("hello", "world")
         );
 
@@ -75,9 +74,9 @@ class UdpMessagingPortTest {
         var b = new NodeId("B");
         var c = new NodeId("C");
 
-        int portNumA = 12011;
-        int portNumB = 12012;
-        int portNumC = 12013;
+        int portNumA = freeUdpPort();
+        int portNumB = freeUdpPort();
+        int portNumC = freeUdpPort();
 
         TransportConfig config = new StaticTransportConfig(Map.of(
                 a, new TransportAddress("127.0.0.1", portNumA),
@@ -105,8 +104,15 @@ class UdpMessagingPortTest {
     }
 
     /**
-     * Simple test helper: a fixed map-based config.
+     * Asks the OS for a free UDP port, then releases it.
+     * There is a tiny race, but it is very unlikely in tests and far better than hard-coded ports.
      */
+    private static int freeUdpPort() throws IOException {
+        try (DatagramSocket s = new DatagramSocket(0)) {
+            return s.getLocalPort();
+        }
+    }
+
     static final class StaticTransportConfig implements TransportConfig {
         private final Map<NodeId, TransportAddress> map;
 

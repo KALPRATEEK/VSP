@@ -1,4 +1,7 @@
 package de.haw.vsp.simulation.middleware.udp;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import de.haw.vsp.simulation.middleware.MessageHandler;
 import de.haw.vsp.simulation.middleware.MessagingPort;
@@ -44,6 +47,14 @@ public final class UdpMessagingPort implements MessagingPort, Closeable {
     private volatile MessageHandler handler; // for the local node
     private final ExecutorService receiverExecutor;
     private final AtomicBoolean running = new AtomicBoolean(true);
+
+    private static final Logger LOG = Logger.getLogger(UdpMessagingPort.class.getName());
+
+    private final AtomicLong sentCount = new AtomicLong();
+    private final AtomicLong receivedCount = new AtomicLong();
+    private final AtomicLong droppedCount = new AtomicLong();
+    private final AtomicLong decodeFailedCount = new AtomicLong();
+
 
     /**
      * Create and bind a UDP endpoint for the given local node.
@@ -108,22 +119,31 @@ public final class UdpMessagingPort implements MessagingPort, Closeable {
 
         TransportAddress addr = transportConfig.resolve(receiver);
         if (addr == null) {
-            // Best-effort: drop if cannot resolve
+            droppedCount.incrementAndGet();
+            LOG.log(Level.FINE, () -> "UDP drop: cannot resolve receiver=" + receiver
+                    + " msgId=" + message.messageId() + " type=" + message.type());
             return;
         }
+        sentCount.incrementAndGet();
+
 
         byte[] payload;
         try {
             payload = serializer.serialize(message);
         } catch (MessageCodecException e) {
-            // Best-effort: drop if cannot encode
+            droppedCount.incrementAndGet();
+            LOG.log(Level.FINE, () -> "UDP drop: encode failed msgId=" + message.messageId()
+                    + " type=" + message.type());
             return;
         }
 
         // UDP datagrams have size limits; ensure we don't exceed.
         if (payload.length > maxDatagramBytes) {
-            // Best-effort: drop oversize datagram
+            droppedCount.incrementAndGet();
+            LOG.log(Level.FINE, () -> "UDP drop: datagram too large bytes=" + payload.length
+                    + " msgId=" + message.messageId() + " type=" + message.type());
             return;
+
         }
 
         try {
@@ -131,7 +151,10 @@ public final class UdpMessagingPort implements MessagingPort, Closeable {
             DatagramPacket packet = new DatagramPacket(payload, payload.length, targetHost, addr.port());
             socket.send(packet);
         } catch (IOException e) {
-            // Best-effort: drop on send error
+            droppedCount.incrementAndGet();
+            LOG.log(Level.FINE, () -> "UDP drop: send IOException to " + addr.host() + ":" + addr.port()
+                    + " msgId=" + message.messageId() + " type=" + message.type());
+
         }
     }
 
@@ -177,6 +200,7 @@ public final class UdpMessagingPort implements MessagingPort, Closeable {
             while (running.get()) {
                 try {
                     socket.receive(packet);
+                    receivedCount.incrementAndGet();
 
                     // Copy exactly the received bytes
                     byte[] received = new byte[packet.getLength()];
@@ -186,15 +210,19 @@ public final class UdpMessagingPort implements MessagingPort, Closeable {
                     try {
                         msg = deserializer.deserialize(received);
                     } catch (MessageCodecException decodeError) {
-                        // Ignore invalid datagrams
+                        decodeFailedCount.incrementAndGet();
+                        LOG.log(Level.FINE, "UDP decode failed, dropping datagram", decodeError);
                         continue;
                     }
 
                     MessageHandler current = this.handler;
                     if (current != null) {
                         current.onMessage(msg);
+                    } else {
+                        droppedCount.incrementAndGet();
+                        LOG.log(Level.FINE, () -> "UDP drop: no handler registered for local node " + localNodeId
+                                + " msgId=" + msg.messageId() + " type=" + msg.type());
                     }
-                    // else: drop if no handler registered
 
                 } catch (SocketException e) {
                     // socket.close() will interrupt receive() with a SocketException
@@ -245,4 +273,21 @@ public final class UdpMessagingPort implements MessagingPort, Closeable {
                 : (local.host() + ":" + local.port());
         return "UdpMessagingPort{localNodeId=" + localNodeId + ", bound=" + bound + "}";
     }
+
+    public long sentCount() {
+        return sentCount.get();
+    }
+
+    public long receivedCount() {
+        return receivedCount.get();
+    }
+
+    public long droppedCount() {
+        return droppedCount.get();
+    }
+
+    public long decodeFailedCount() {
+        return decodeFailedCount.get();
+    }
+
 }
