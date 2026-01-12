@@ -470,6 +470,89 @@ public interface NodeAlgorithm {
 
 ---
 
+## 1.7 Implementation Classes: SimulationNode and SimulationNodeContext
+
+These are the concrete implementation classes for the Node and NodeContext interfaces.
+
+### SimulationNode
+
+```java
+public class SimulationNode implements Node {
+    
+    public SimulationNode(NodeId nodeId, Set<NodeId> neighbors, 
+                         NodeAlgorithm algorithm, NodeContext nodeContext);
+    
+    @Override
+    public void onStart();
+    
+    @Override
+    public void onMessage(NodeContext context, SimulationMessage message);
+    
+    public NodeId getNodeId();
+    
+    public Set<NodeId> getNeighbors();
+    
+    public boolean isStarted();
+}
+```
+
+### Reasoning – SimulationNode
+
+- **Functional Requirements**  
+  - The simulation engine needs a concrete node implementation to execute algorithm logic.
+  - Nodes must track their lifecycle state and delegate to pluggable algorithms.
+
+- **Technical Context**  
+  - Created by the simulation engine for each node in the network topology.
+  - Manages the node's lifecycle and state.
+
+- **Quality Goals**  
+  - **Correctness**: Enforces that `onStart()` is called exactly once before message processing.
+  - **Openness**: Accepts any `NodeAlgorithm` implementation via constructor injection.
+  - **Usability**: Provides clear lifecycle guarantees and state inspection methods.
+
+---
+
+### SimulationNodeContext
+
+```java
+public class SimulationNodeContext implements NodeContext {
+    
+    public SimulationNodeContext(NodeId nodeId, Set<NodeId> neighbors, 
+                                MessagingPort messagingPort);
+    
+    @Override
+    public NodeId self();
+    
+    @Override
+    public Set<NodeId> neighbors();
+    
+    @Override
+    public void send(NodeId target, SimulationMessage message);
+    
+    @Override
+    public void broadcast(Set<NodeId> targets, SimulationMessage message);
+}
+```
+
+### Reasoning – SimulationNodeContext
+
+- **Functional Requirements**  
+  - Algorithms need a concrete context implementation to access node identity, neighbors, and messaging.
+  - All messaging operations must be delegated to the underlying transport layer.
+
+- **Technical Context**  
+  - Wraps a `MessagingPort` instance to abstract transport details (UDP, in-memory, etc.).
+  - Created once per node and remains immutable regarding identity and neighbors.
+
+- **Quality Goals**  
+  - **Distribution Transparency**: Algorithms never see UDP sockets, Docker networking, or other transport details.
+  - **Immutability**: Node identity and neighbor set cannot change during simulation, ensuring consistent behavior.
+  - **Shared Resources**: MessagingPort handles resource sharing (sockets, ports) transparently.
+  - **Usability**: Simple, validated API for all node-to-node communication needs.
+
+---
+
 
 ---
 
