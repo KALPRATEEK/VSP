@@ -71,4 +71,97 @@ public class DefaultSimulationControl implements SimulationControl {
         // Return the simulation ID
         return simulationId;
     }
+
+    @Override
+    public void selectAlgorithm(SimulationId simulationId, String algorithmId) {
+        // Validate parameters
+        if (simulationId == null) {
+            throw new IllegalArgumentException("simulationId must not be null");
+        }
+        if (algorithmId == null || algorithmId.isBlank()) {
+            throw new IllegalArgumentException("algorithmId must not be null or blank");
+        }
+
+        // Find the simulation
+        SimulationEngine engine = simulations.get(simulationId);
+        if (engine == null) {
+            throw new IllegalStateException("Simulation not found: " + simulationId);
+        }
+
+        // Check if simulation is running (algorithm cannot be changed while running)
+        // We need to cast to DefaultSimulationEngine to access getState()
+        if (engine instanceof DefaultSimulationEngine) {
+            DefaultSimulationEngine defaultEngine = (DefaultSimulationEngine) engine;
+            DefaultSimulationEngine.SimulationState state = defaultEngine.getState();
+            if (state == DefaultSimulationEngine.SimulationState.RUNNING ||
+                    state == DefaultSimulationEngine.SimulationState.PAUSED) {
+                throw new IllegalStateException(
+                        "Algorithm cannot be changed while simulation is running or paused. Current state: " + state
+                );
+            }
+        }
+
+        // Configure the algorithm on the engine
+        engine.configureAlgorithm(algorithmId);
+    }
+
+    @Override
+    public void startSimulation(SimulationId simulationId, de.haw.vsp.simulation.core.SimulationParameters parameters) {
+        if (simulationId == null) {
+            throw new IllegalArgumentException("simulationId must not be null");
+        }
+        if (parameters == null) {
+            throw new IllegalArgumentException("parameters must not be null");
+        }
+
+        SimulationEngine engine = simulations.get(simulationId);
+        if (engine == null) {
+            throw new IllegalStateException("Simulation not found: " + simulationId);
+        }
+
+        // Start simulation asynchronously - method returns immediately
+        engine.startSimulation(parameters);
+    }
+
+    @Override
+    public void pauseSimulation(SimulationId simulationId) {
+        if (simulationId == null) {
+            throw new IllegalArgumentException("simulationId must not be null");
+        }
+
+        SimulationEngine engine = simulations.get(simulationId);
+        if (engine == null) {
+            throw new IllegalStateException("Simulation not found: " + simulationId);
+        }
+
+        engine.pauseSimulation();
+    }
+
+    @Override
+    public void resumeSimulation(SimulationId simulationId) {
+        if (simulationId == null) {
+            throw new IllegalArgumentException("simulationId must not be null");
+        }
+
+        SimulationEngine engine = simulations.get(simulationId);
+        if (engine == null) {
+            throw new IllegalStateException("Simulation not found: " + simulationId);
+        }
+
+        engine.resumeSimulation();
+    }
+
+    @Override
+    public void stopSimulation(SimulationId simulationId) {
+        if (simulationId == null) {
+            throw new IllegalArgumentException("simulationId must not be null");
+        }
+
+        SimulationEngine engine = simulations.get(simulationId);
+        if (engine == null) {
+            throw new IllegalStateException("Simulation not found: " + simulationId);
+        }
+
+        engine.stopSimulation();
+    }
 }

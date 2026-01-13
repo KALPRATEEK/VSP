@@ -1,13 +1,17 @@
 package de.haw.vsp.simulation.engine;
 
+import de.haw.vsp.simulation.core.MetricsSnapshot;
 import de.haw.vsp.simulation.core.NetworkConfig;
 import de.haw.vsp.simulation.core.NodeId;
+import de.haw.vsp.simulation.core.SimulationEvent;
 import de.haw.vsp.simulation.core.SimulationEventPublisher;
 import de.haw.vsp.simulation.core.SimulationParameters;
 import de.haw.vsp.simulation.middleware.MessagingPort;
 import de.haw.vsp.simulation.middleware.inmemory.InMemoryMessagingPort;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Default implementation of SimulationEngine.
@@ -27,7 +31,21 @@ public class DefaultSimulationEngine implements SimulationEngine {
     private SimulationEventPublisher eventPublisher;
     private Map<NodeId, SimulationNode> nodes;
     private String currentAlgorithmId;
-    private SimulationState state;
+    private volatile SimulationState state;
+    private SimulationParameters simulationParameters;
+    
+    // Metrics tracking
+    private final AtomicLong simulatedTime;
+    private final AtomicLong messageCount;
+    private final AtomicLong rounds;
+    private final AtomicBoolean converged;
+    private String leaderId;
+    private long startTimeMillis;
+    
+    // Simulation loop control
+    private Thread simulationThread;
+    private final AtomicBoolean shouldStop;
+    private final AtomicLong currentStep;
 
     /**
      * Creates a new simulation engine with an in-memory messaging port.
@@ -49,6 +67,15 @@ public class DefaultSimulationEngine implements SimulationEngine {
         this.messagingPort = messagingPort;
         this.nodes = new HashMap<>();
         this.state = SimulationState.UNINITIALIZED;
+        this.currentAlgorithmId = null;
+        this.simulatedTime = new AtomicLong(0);
+        this.messageCount = new AtomicLong(0);
+        this.rounds = new AtomicLong(0);
+        this.converged = new AtomicBoolean(false);
+        this.leaderId = null;
+        this.startTimeMillis = 0;
+        this.shouldStop = new AtomicBoolean(false);
+        this.currentStep = new AtomicLong(0);
     }
 
     @Override
@@ -123,6 +150,11 @@ public class DefaultSimulationEngine implements SimulationEngine {
 
         // Recreate nodes with the new algorithm if already created
         if (!nodes.isEmpty()) {
+            // Unregister old handlers first
+            for (NodeId nodeId : nodes.keySet()) {
+                messagingPort.unregisterHandler(new de.haw.vsp.simulation.middleware.NodeId(nodeId.value()));
+            }
+            
             // Get current topology
             Map<NodeId, Set<NodeId>> topology = new HashMap<>();
             for (SimulationNode node : nodes.values()) {
@@ -139,6 +171,27 @@ public class DefaultSimulationEngine implements SimulationEngine {
                 NodeAlgorithm algorithm = new FloodingLeaderElectionAlgorithm();
                 SimulationNode node = new SimulationNode(nodeId, neighbors, algorithm, nodeContext);
 
+                // Register message handler for the new node
+                final SimulationNode finalNode = node;
+                messagingPort.registerHandler(
+                        new de.haw.vsp.simulation.middleware.NodeId(nodeId.value()),
+                        message -> {
+                            // Convert middleware message to core message
+                            de.haw.vsp.simulation.core.NodeId senderNodeId =
+                                    new de.haw.vsp.simulation.core.NodeId(message.sender().value());
+                            de.haw.vsp.simulation.core.NodeId receiverNodeId =
+                                    new de.haw.vsp.simulation.core.NodeId(message.receiver().value());
+                            de.haw.vsp.simulation.core.SimulationMessage coreMessage =
+                                    new de.haw.vsp.simulation.core.SimulationMessage(
+                                            senderNodeId,
+                                            receiverNodeId,
+                                            message.type(),
+                                            message.payload() != null ? message.payload().toString() : null
+                                    );
+                            finalNode.onMessage(nodeContext, coreMessage);
+                        }
+                );
+
                 newNodes.put(nodeId, node);
             }
 
@@ -154,6 +207,29 @@ public class DefaultSimulationEngine implements SimulationEngine {
         if (state != SimulationState.INITIALIZED) {
             throw new IllegalStateException("Simulation must be initialized before starting. Current state: " + state);
         }
+        if (currentAlgorithmId == null || currentAlgorithmId.isBlank()) {
+            throw new IllegalStateException("Algorithm must be configured before starting simulation. Call configureAlgorithm() first.");
+        }
+
+        this.simulationParameters = parameters;
+        
+        // Reset metrics and start time
+        this.simulatedTime.set(0);
+        this.messageCount.set(0);
+        this.rounds.set(0);
+        this.currentStep.set(0);
+        this.converged.set(false);
+        this.leaderId = null;
+        this.shouldStop.set(false);
+        this.startTimeMillis = System.currentTimeMillis();
+
+        // Publish start event
+        publishEvent(SimulationEvent.withoutPeer(
+                System.currentTimeMillis(),
+                "SIMULATION_START",
+                "system",
+                "Simulation started with " + nodes.size() + " nodes, maxSteps=" + parameters.maxSteps()
+        ));
 
         // Start all nodes
         // Important: When a node's onStart() sends messages via InMemoryMessagingPort,
@@ -171,9 +247,19 @@ public class DefaultSimulationEngine implements SimulationEngine {
         // Phase 2: Call onStart() on all nodes (they can now send and receive messages)
         for (SimulationNode node : nodes.values()) {
             node.onStart();
+            // Publish node start event
+            publishEvent(SimulationEvent.withoutPeer(
+                    System.currentTimeMillis(),
+                    "NODE_START",
+                    node.getNodeId().value(),
+                    "Node started"
+            ));
         }
 
         this.state = SimulationState.RUNNING;
+        
+        // Start simulation loop in background thread
+        startSimulationLoop();
     }
 
     @Override
@@ -182,6 +268,14 @@ public class DefaultSimulationEngine implements SimulationEngine {
             throw new IllegalStateException("Simulation must be running to pause. Current state: " + state);
         }
         this.state = SimulationState.PAUSED;
+        
+        // Publish pause event
+        publishEvent(SimulationEvent.withoutPeer(
+                System.currentTimeMillis(),
+                "SIMULATION_PAUSE",
+                "system",
+                "Simulation paused"
+        ));
     }
 
     @Override
@@ -190,17 +284,216 @@ public class DefaultSimulationEngine implements SimulationEngine {
             throw new IllegalStateException("Simulation must be paused to resume. Current state: " + state);
         }
         this.state = SimulationState.RUNNING;
+        
+        // Publish resume event
+        publishEvent(SimulationEvent.withoutPeer(
+                System.currentTimeMillis(),
+                "SIMULATION_RESUME",
+                "system",
+                "Simulation resumed"
+        ));
+        
+        // Resume simulation loop
+        startSimulationLoop();
     }
 
     @Override
     public void stopSimulation() {
-        cleanup();
+        // Signal stop
+        shouldStop.set(true);
         this.state = SimulationState.STOPPED;
+        
+        // Wait for simulation thread to finish if running
+        if (simulationThread != null && simulationThread.isAlive()) {
+            // Interrupt the thread to ensure it stops promptly
+            simulationThread.interrupt();
+            
+            try {
+                // Wait for thread to terminate, with timeout
+                simulationThread.join(5000); // Wait up to 5 seconds
+                
+                // If thread is still alive after timeout, log warning but continue
+                // The thread is a daemon thread, so it won't prevent JVM shutdown
+                if (simulationThread.isAlive()) {
+                    System.err.println("Warning: Simulation thread did not terminate within timeout. " +
+                            "Proceeding with cleanup, but thread may still be running.");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                // If interrupted, still try to proceed with cleanup
+            }
+        }
+        
+        // Finalize metrics (safe to call even if thread is still running,
+        // as it only accesses AtomicLong/AtomicBoolean which are thread-safe)
+        finalizeMetrics();
+        
+        // Publish stop event
+        publishEvent(SimulationEvent.withoutPeer(
+                System.currentTimeMillis(),
+                "SIMULATION_STOP",
+                "system",
+                "Simulation stopped after " + rounds.get() + " rounds"
+        ));
+        
+        // Cleanup: unregister handlers and clear nodes
+        // This is safe because shouldStop is set and state is STOPPED,
+        // so the simulation loop should exit soon if still running
+        cleanup();
     }
 
     @Override
     public void setEventPublisher(SimulationEventPublisher eventPublisher) {
         this.eventPublisher = eventPublisher;
+    }
+
+    /**
+     * Starts the simulation loop in a background thread.
+     * The loop runs until maxSteps is reached or stopSimulation() is called.
+     */
+    private void startSimulationLoop() {
+        if (simulationThread != null && simulationThread.isAlive()) {
+            // Loop already running
+            return;
+        }
+        
+        simulationThread = new Thread(() -> {
+            while (!shouldStop.get() && currentStep.get() < simulationParameters.maxSteps()) {
+                // Check if paused
+                if (state == SimulationState.PAUSED) {
+                    try {
+                        Thread.sleep(100); // Wait while paused
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                    continue;
+                }
+                
+                // Check if still running
+                if (state != SimulationState.RUNNING) {
+                    break;
+                }
+                
+                // Execute one simulation step
+                executeSimulationStep();
+                
+                currentStep.incrementAndGet();
+                rounds.incrementAndGet();
+                simulatedTime.incrementAndGet();
+                
+                // Check for convergence (simplified - in real implementation, check algorithm state)
+                // For now, we'll assume convergence after a certain number of rounds
+                // This should be determined by the algorithm itself
+                
+                // Small delay to prevent CPU spinning and allow tests to check state
+                try {
+                    Thread.sleep(Math.max(1, simulationParameters.messageDelayMillis()));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+            
+            // Simulation finished (either maxSteps reached or stopped)
+            if (currentStep.get() >= simulationParameters.maxSteps()) {
+                // Max steps reached
+                publishEvent(SimulationEvent.withoutPeer(
+                        System.currentTimeMillis(),
+                        "SIMULATION_MAX_STEPS_REACHED",
+                        "system",
+                        "Simulation reached maxSteps: " + simulationParameters.maxSteps()
+                ));
+                shouldStop.set(true);
+                state = SimulationState.STOPPED;
+            }
+        });
+        
+        simulationThread.setDaemon(true);
+        simulationThread.start();
+    }
+    
+    /**
+     * Executes one simulation step.
+     * In a real implementation, this would trigger algorithm execution on all nodes.
+     * For now, this is a placeholder that allows the simulation to progress.
+     */
+    private void executeSimulationStep() {
+        // In a real implementation, this would:
+        // 1. Trigger algorithm execution on all nodes
+        // 2. Process pending messages
+        // 3. Update metrics
+        // For now, we just increment the step counter
+        // The actual algorithm execution happens through message passing
+    }
+    
+    /**
+     * Finalizes metrics before stopping the simulation.
+     */
+    private void finalizeMetrics() {
+        // Determine leader (simplified - in real implementation, query algorithm state)
+        // For now, we'll leave leaderId as null or set it based on algorithm state
+        // This should be implemented by querying the algorithm for the elected leader
+        
+        // Check convergence (simplified)
+        // In a real implementation, this would check if all nodes have converged
+        converged.set(true); // Simplified - assume converged when stopped
+    }
+    
+    /**
+     * Publishes a simulation event if an event publisher is set.
+     */
+    private void publishEvent(SimulationEvent event) {
+        if (eventPublisher != null) {
+            try {
+                eventPublisher.publish(event);
+            } catch (Exception e) {
+                // Log but don't fail - event publishing should not break simulation
+                System.err.println("Warning: Error publishing event: " + e.getMessage());
+            }
+        }
+    }
+    
+    /**
+     * Gets the current metrics snapshot.
+     *
+     * @return current metrics snapshot
+     */
+    public MetricsSnapshot getMetrics() {
+        long realTimeMillis = System.currentTimeMillis() - startTimeMillis;
+        return new MetricsSnapshot(
+                simulatedTime.get(),
+                realTimeMillis,
+                messageCount.get(),
+                rounds.get(),
+                converged.get(),
+                leaderId
+        );
+    }
+    
+    /**
+     * Increments the message count (called when a message is sent).
+     */
+    public void incrementMessageCount() {
+        messageCount.incrementAndGet();
+    }
+    
+    /**
+     * Sets the leader ID (called by algorithm when leader is elected).
+     *
+     * @param leaderId the leader ID
+     */
+    public void setLeaderId(String leaderId) {
+        this.leaderId = leaderId;
+    }
+    
+    /**
+     * Sets the convergence state (called by algorithm when converged).
+     *
+     * @param converged true if converged, false otherwise
+     */
+    public void setConverged(boolean converged) {
+        this.converged.set(converged);
     }
 
     /**

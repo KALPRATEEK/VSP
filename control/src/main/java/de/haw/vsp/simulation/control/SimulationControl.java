@@ -32,4 +32,68 @@ public interface SimulationControl {
      * @throws IllegalArgumentException if config is null or invalid
      */
     SimulationId initializeNetwork(NetworkConfig config);
+
+    /**
+     * Selects and configures the algorithm for a simulation.
+     *
+     * Configures the algorithm to be used by all nodes in the specified simulation.
+     * The algorithm must be selected before starting the simulation.
+     *
+     * Note: Currently uses {@code String} for algorithmId. The documentation mentions
+     * {@code AlgorithmId} as a type, but the implementation uses String for simplicity.
+     * This may be refactored to a dedicated AlgorithmId type in the future.
+     *
+     * @param simulationId the simulation identifier (must not be null)
+     * @param algorithmId  the algorithm identifier (must not be null or blank)
+     * @throws IllegalArgumentException if simulationId is null, algorithmId is null/blank, or algorithmId is invalid
+     * @throws IllegalStateException    if simulation is not found or already running
+     */
+    void selectAlgorithm(SimulationId simulationId, String algorithmId);
+
+    /**
+     * Starts a simulation asynchronously.
+     *
+     * The simulation runs in the background. The method returns immediately.
+     * The simulation will automatically stop after maxSteps steps.
+     *
+     * @param simulationId the simulation identifier (must not be null)
+     * @param parameters   the simulation parameters (must not be null)
+     * @throws IllegalArgumentException if simulationId is null or parameters is null
+     * @throws IllegalStateException    if simulation is not found or not in a valid state to start
+     */
+    void startSimulation(SimulationId simulationId, de.haw.vsp.simulation.core.SimulationParameters parameters);
+
+    /**
+     * Pauses a running simulation.
+     *
+     * The simulation state is preserved and can be resumed later.
+     *
+     * @param simulationId the simulation identifier (must not be null)
+     * @throws IllegalArgumentException if simulationId is null
+     * @throws IllegalStateException    if simulation is not found or not running
+     */
+    void pauseSimulation(SimulationId simulationId);
+
+    /**
+     * Resumes a paused simulation.
+     *
+     * The simulation continues from where it was paused.
+     *
+     * @param simulationId the simulation identifier (must not be null)
+     * @throws IllegalArgumentException if simulationId is null
+     * @throws IllegalStateException    if simulation is not found or not paused
+     */
+    void resumeSimulation(SimulationId simulationId);
+
+    /**
+     * Stops a simulation.
+     *
+     * The simulation is terminated deterministically and cannot be resumed.
+     * Metrics are finalized and the simulation state is cleaned up.
+     *
+     * @param simulationId the simulation identifier (must not be null)
+     * @throws IllegalArgumentException if simulationId is null
+     * @throws IllegalStateException    if simulation is not found
+     */
+    void stopSimulation(SimulationId simulationId);
 }

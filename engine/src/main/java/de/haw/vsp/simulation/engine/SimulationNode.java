@@ -25,8 +25,8 @@ public class SimulationNode implements Node {
     private final Set<NodeId> neighbors;
     private final NodeAlgorithm algorithm;
     private final NodeContext nodeContext;
-    private boolean started;
-    private boolean algorithmInitialized;
+    private volatile boolean started;
+    private volatile boolean algorithmInitialized;
     private final Queue<SimulationMessage> pendingMessages;
 
     /**
@@ -73,13 +73,31 @@ public class SimulationNode implements Node {
         }
         
         // Initialize the algorithm
-        algorithm.onStart(nodeContext);
-        algorithmInitialized = true;
+        // Keep algorithmInitialized = false during onStart() execution so that
+        // any messages arriving during initialization will be buffered
+        boolean initializationSucceeded = false;
+        try {
+            algorithm.onStart(nodeContext);
+            initializationSucceeded = true;
+        } finally {
+            // Set algorithmInitialized in finally block to ensure it's always set,
+            // even if algorithm.onStart() throws an exception. This prevents
+            // re-initialization attempts and maintains idempotency.
+            // Messages arriving during onStart() are still buffered because
+            // onMessage() checks algorithmInitialized at the start of the method,
+            // before onStart() completes.
+            algorithmInitialized = true;
+        }
         
-        // Process all pending messages that arrived before initialization
-        while (!pendingMessages.isEmpty()) {
-            SimulationMessage message = pendingMessages.poll();
-            algorithm.onMessage(nodeContext, message);
+        // Process all pending messages that arrived before or during initialization
+        // Only process if initialization succeeded (no exception was thrown)
+        // If initialization failed, pending messages remain buffered but are not processed,
+        // as the algorithm is in an inconsistent state
+        if (initializationSucceeded) {
+            while (!pendingMessages.isEmpty()) {
+                SimulationMessage message = pendingMessages.poll();
+                algorithm.onMessage(nodeContext, message);
+            }
         }
     }
 

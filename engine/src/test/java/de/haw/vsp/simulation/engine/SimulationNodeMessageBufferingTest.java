@@ -29,6 +29,9 @@ class SimulationNodeMessageBufferingTest {
         // Initialize the engine (creates nodes but doesn't start them)
         engine.createEngineAndNodes(config);
 
+        // Configure algorithm before starting simulation
+        engine.configureAlgorithm("flooding-leader-election");
+
         // Get the nodes
         // Note: We need to access nodes to verify behavior, but DefaultSimulationEngine
         // doesn't expose them. Instead, we'll test through the startSimulation behavior.

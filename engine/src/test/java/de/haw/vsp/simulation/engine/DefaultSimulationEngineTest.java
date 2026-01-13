@@ -98,14 +98,32 @@ class DefaultSimulationEngineTest {
         void shouldAllowStartingSimulationAfterInitialization() {
             NetworkConfig config = new NetworkConfig(3, TopologyType.LINE);
             engine.createEngineAndNodes(config);
+            engine.configureAlgorithm("flooding-leader-election");
 
             assertEquals(DefaultSimulationEngine.SimulationState.INITIALIZED, engine.getState());
 
-            // Should be able to start after initialization
+            // Should be able to start after initialization and algorithm configuration
             de.haw.vsp.simulation.core.SimulationParameters params =
                     new de.haw.vsp.simulation.core.SimulationParameters(42L, 100, 10);
             assertDoesNotThrow(() -> engine.startSimulation(params));
             assertEquals(DefaultSimulationEngine.SimulationState.RUNNING, engine.getState());
+        }
+
+        @Test
+        @DisplayName("should reject starting simulation without algorithm")
+        void shouldRejectStartingSimulationWithoutAlgorithm() {
+            NetworkConfig config = new NetworkConfig(3, TopologyType.LINE);
+            engine.createEngineAndNodes(config);
+            // Don't configure algorithm
+
+            de.haw.vsp.simulation.core.SimulationParameters params =
+                    new de.haw.vsp.simulation.core.SimulationParameters(42L, 100, 10);
+            
+            IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> engine.startSimulation(params)
+            );
+            assertTrue(exception.getMessage().contains("Algorithm must be configured before starting simulation"));
         }
 
         @Test
