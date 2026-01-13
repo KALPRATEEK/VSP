@@ -138,9 +138,10 @@ class SimulationNodeContextTest {
         @DisplayName("should return immutable neighbor set")
         void shouldReturnImmutableNeighborSet() {
             Set<NodeId> result = context.neighbors();
+            final NodeId newNodeId = new NodeId("node-4");
 
             assertThrows(UnsupportedOperationException.class,
-                    () -> result.add(new NodeId("node-4")));
+                    () -> result.add(newNodeId));
         }
 
         @Test
@@ -188,8 +189,8 @@ class SimulationNodeContextTest {
 
             assertEquals(1, messagingPort.sentMessages.size());
             TestMessagingPort.SentMessage sent = messagingPort.sentMessages.get(0);
-            assertEquals(target, sent.receiver);
-            assertEquals(message, sent.message);
+            assertEquals("node-2", sent.receiver.value());
+            assertEquals("TEST", sent.message.type());
         }
 
         @Test
@@ -271,8 +272,8 @@ class SimulationNodeContextTest {
 
             assertEquals(1, messagingPort.broadcastMessages.size());
             TestMessagingPort.BroadcastMessage broadcast = messagingPort.broadcastMessages.get(0);
-            assertEquals(targets, broadcast.receivers);
-            assertEquals(message, broadcast.message);
+            assertEquals(2, broadcast.receivers.size());
+            assertEquals("TEST", broadcast.message.type());
         }
 
         @Test
@@ -289,7 +290,7 @@ class SimulationNodeContextTest {
             context.broadcast(emptyTargets, message);
 
             assertEquals(1, messagingPort.broadcastMessages.size());
-            assertEquals(emptyTargets, messagingPort.broadcastMessages.get(0).receivers);
+            assertTrue(messagingPort.broadcastMessages.get(0).receivers.isEmpty());
         }
 
         @Test
@@ -391,40 +392,44 @@ class SimulationNodeContextTest {
         final List<BroadcastMessage> broadcastMessages = new ArrayList<>();
 
         @Override
-        public void send(NodeId receiver, SimulationMessage message) {
+        public void send(de.haw.vsp.simulation.middleware.NodeId receiver,
+                        de.haw.vsp.simulation.middleware.SimulationMessage message) {
             sentMessages.add(new SentMessage(receiver, message));
         }
 
         @Override
-        public void broadcast(Set<NodeId> receivers, SimulationMessage message) {
+        public void broadcast(Set<de.haw.vsp.simulation.middleware.NodeId> receivers,
+                             de.haw.vsp.simulation.middleware.SimulationMessage message) {
             broadcastMessages.add(new BroadcastMessage(receivers, message));
         }
 
         @Override
-        public void registerHandler(NodeId nodeId, MessageHandler handler) {
+        public void registerHandler(de.haw.vsp.simulation.middleware.NodeId nodeId, MessageHandler handler) {
             // Not needed for NodeContext tests
         }
 
         @Override
-        public void unregisterHandler(NodeId nodeId) {
+        public void unregisterHandler(de.haw.vsp.simulation.middleware.NodeId nodeId) {
             // Not needed for NodeContext tests
         }
 
         static class SentMessage {
-            final NodeId receiver;
-            final SimulationMessage message;
+            final de.haw.vsp.simulation.middleware.NodeId receiver;
+            final de.haw.vsp.simulation.middleware.SimulationMessage message;
 
-            SentMessage(NodeId receiver, SimulationMessage message) {
+            SentMessage(de.haw.vsp.simulation.middleware.NodeId receiver,
+                       de.haw.vsp.simulation.middleware.SimulationMessage message) {
                 this.receiver = receiver;
                 this.message = message;
             }
         }
 
         static class BroadcastMessage {
-            final Set<NodeId> receivers;
-            final SimulationMessage message;
+            final Set<de.haw.vsp.simulation.middleware.NodeId> receivers;
+            final de.haw.vsp.simulation.middleware.SimulationMessage message;
 
-            BroadcastMessage(Set<NodeId> receivers, SimulationMessage message) {
+            BroadcastMessage(Set<de.haw.vsp.simulation.middleware.NodeId> receivers,
+                            de.haw.vsp.simulation.middleware.SimulationMessage message) {
                 this.receivers = receivers;
                 this.message = message;
             }

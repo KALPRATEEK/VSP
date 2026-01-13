@@ -553,6 +553,70 @@ public class SimulationNodeContext implements NodeContext {
 
 ---
 
+## 1.8 Algorithm Implementations: FloodingLeaderElectionAlgorithm
+
+This is the first concrete implementation of the `NodeAlgorithm` interface.
+
+### FloodingLeaderElectionAlgorithm
+
+```java
+public class FloodingLeaderElectionAlgorithm implements NodeAlgorithm {
+    
+    public FloodingLeaderElectionAlgorithm();
+    
+    @Override
+    public void onStart(NodeContext context);
+    
+    @Override
+    public void onMessage(NodeContext context, SimulationMessage message);
+    
+    public NodeId getCurrentLeaderId();
+    
+    public boolean isConverged();
+}
+```
+
+### Algorithm Behavior
+
+- **Initialization**:
+  - Each node starts with its own ID as `currentLeaderId`
+  - Convergence status starts as `false`
+
+- **On Start**:
+  - Broadcasts own ID to all neighbors using message type `LEADER_ANNOUNCEMENT`
+
+- **On Message**:
+  - If message type is `LEADER_ANNOUNCEMENT` and payload contains a higher NodeId:
+    - Updates `currentLeaderId` to the higher ID
+    - Sets `converged = false`
+    - Broadcasts the new leader to all neighbors
+  - If message contains lower or equal ID: ignores the message (already has better or equal leader)
+  - Ignores unknown message types and invalid payloads
+
+- **Convergence**:
+  - Algorithm converges when no node updates its leader anymore
+  - In a connected graph: exactly one leader is elected (the node with maximum NodeId)
+
+### Reasoning – FloodingLeaderElectionAlgorithm
+
+- **Functional Requirements**  
+  - The system must implement a flooding-based leader election algorithm
+  - Algorithm must elect exactly one leader in connected networks
+  - The elected leader must have the maximum NodeId
+
+- **Technical Context**  
+  - Uses only the `NodeContext` interface for all communication
+  - Messages are sent asynchronously via MessagingPort
+  - No assumptions about message delivery guarantees
+
+- **Quality Goals**  
+  - **Correctness**: Guarantees that max(NodeId) is elected in connected graphs
+  - **Openness**: First example of a pluggable algorithm implementation
+  - **Transparency**: Leader election progress is observable via getCurrentLeaderId()
+  - **Scalability**: Converges in O(diameter) rounds with O(edges) messages in typical topologies
+
+---
+
 
 ---
 
