@@ -1,5 +1,17 @@
+import { httpRequest } from "./httpClient";
+import type { NetworkConfig } from "./dto/NetworkConfig";
+import type { SimulationId } from "./dto/SimulationId";
+
 export const simulationApi = {
-  async ping(): Promise<string> {
-    return Promise.resolve("ok");
-  }
+  async initializeNetwork(
+    config: NetworkConfig
+  ): Promise<SimulationId> {
+    return httpRequest<SimulationId>(() =>
+      fetch("/api/simulation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(config),
+      })
+    );
+  },
 };
