@@ -50,6 +50,11 @@ public class FloodingLeaderElectionAlgorithm implements NodeAlgorithm {
 
     @Override
     public void onMessage(NodeContext context, SimulationMessage message) {
+        // Note: This method is only called after onStart() has been called,
+        // so currentLeaderId is guaranteed to be non-null. Messages arriving
+        // before initialization are buffered by SimulationNode and processed
+        // after onStart() completes.
+
         if (!MESSAGE_TYPE_LEADER_ANNOUNCEMENT.equals(message.messageType())) {
             // Ignore unknown message types
             return;

@@ -3,6 +3,8 @@ package de.haw.vsp.simulation.engine;
 import de.haw.vsp.simulation.core.NodeId;
 import de.haw.vsp.simulation.core.SimulationMessage;
 
+import java.util.ArrayDeque;
+import java.util.Queue;
 import java.util.Set;
 
 /**
@@ -24,6 +26,8 @@ public class SimulationNode implements Node {
     private final NodeAlgorithm algorithm;
     private final NodeContext nodeContext;
     private boolean started;
+    private boolean algorithmInitialized;
+    private final Queue<SimulationMessage> pendingMessages;
 
     /**
      * Creates a new simulation node.
@@ -53,17 +57,48 @@ public class SimulationNode implements Node {
         this.algorithm = algorithm;
         this.nodeContext = nodeContext;
         this.started = false;
+        this.algorithmInitialized = false;
+        this.pendingMessages = new ArrayDeque<>();
     }
 
     @Override
     public void onStart() {
-        if (started) {
+        if (algorithmInitialized) {
             throw new IllegalStateException(
                     "onStart() has already been called for node " + nodeId
             );
         }
-        started = true;
+        if (!started) {
+            started = true;
+        }
+        
+        // Initialize the algorithm
         algorithm.onStart(nodeContext);
+        algorithmInitialized = true;
+        
+        // Process all pending messages that arrived before initialization
+        while (!pendingMessages.isEmpty()) {
+            SimulationMessage message = pendingMessages.poll();
+            algorithm.onMessage(nodeContext, message);
+        }
+    }
+
+    /**
+     * Marks this node as started without calling the algorithm's onStart().
+     * This is used during simulation initialization to allow nodes to receive
+     * messages before their onStart() is called, preventing race conditions
+     * when InMemoryMessagingPort delivers messages synchronously.
+     * 
+     * After calling this method, onStart() must still be called to initialize
+     * the algorithm.
+     */
+    void markAsStarted() {
+        if (started) {
+            throw new IllegalStateException(
+                    "Node " + nodeId + " is already marked as started"
+            );
+        }
+        started = true;
     }
 
     @Override
@@ -80,6 +115,13 @@ public class SimulationNode implements Node {
             throw new IllegalArgumentException("message must not be null");
         }
 
+        // If algorithm is not yet initialized, buffer the message for later processing
+        if (!algorithmInitialized) {
+            pendingMessages.offer(message);
+            return;
+        }
+
+        // Algorithm is initialized, process message immediately
         algorithm.onMessage(context, message);
     }
 
