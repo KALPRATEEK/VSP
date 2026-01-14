@@ -87,7 +87,8 @@ public class FloodingLeaderElectionAlgorithm implements NodeAlgorithm {
                             context.self(),
                             neighbor,
                             MESSAGE_TYPE_LEADER_ANNOUNCEMENT,
-                            leaderId.value()
+                            leaderId.value(),
+                            null
                     )
             );
         }

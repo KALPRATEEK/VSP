@@ -159,6 +159,7 @@ class SimulationNodeTest {
                     new NodeId("node-2"),
                     nodeId,
                     "TEST",
+                    null,
                     null
             );
 
@@ -185,7 +186,8 @@ class SimulationNodeTest {
                     new NodeId("node-2"),
                     nodeId,
                     "TEST",
-                    "payload"
+                    "payload",
+                    null
             );
 
             node.onMessage(context, message);
@@ -205,13 +207,15 @@ class SimulationNodeTest {
                     new NodeId("node-2"),
                     nodeId,
                     "TEST1",
-                    "payload1"
+                    "payload1",
+                    null
             );
             SimulationMessage message2 = new SimulationMessage(
                     new NodeId("node-3"),
                     nodeId,
                     "TEST2",
-                    "payload2"
+                    "payload2",
+                    null
             );
 
             node.onMessage(context, message1);
@@ -231,6 +235,7 @@ class SimulationNodeTest {
                     new NodeId("node-2"),
                     nodeId,
                     "TEST",
+                    null,
                     null
             );
 

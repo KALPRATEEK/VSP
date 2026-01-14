@@ -110,7 +110,8 @@ class FloodingLeaderElectionAlgorithmTest {
                     higherNodeId,
                     nodeId,
                     "LEADER_ANNOUNCEMENT",
-                    higherNodeId.value()
+                    higherNodeId.value(),
+                    null
             );
             algorithm.onMessage(context, msg);
 
@@ -133,7 +134,8 @@ class FloodingLeaderElectionAlgorithmTest {
                     higherNodeId,
                     nodeId,
                     "LEADER_ANNOUNCEMENT",
-                    higherNodeId.value()
+                    higherNodeId.value(),
+                    null
             );
             algorithm.onMessage(context, msg);
 
@@ -162,7 +164,8 @@ class FloodingLeaderElectionAlgorithmTest {
                     lowerNodeId,
                     nodeId,
                     "LEADER_ANNOUNCEMENT",
-                    lowerNodeId.value()
+                    lowerNodeId.value(),
+                    null
             );
             algorithm.onMessage(context, msg);
 
@@ -187,7 +190,8 @@ class FloodingLeaderElectionAlgorithmTest {
                     new NodeId("node-7"),
                     nodeId,
                     "LEADER_ANNOUNCEMENT",
-                    nodeId.value()
+                    nodeId.value(),
+                    null
             );
             algorithm.onMessage(context, msg);
 
@@ -212,7 +216,8 @@ class FloodingLeaderElectionAlgorithmTest {
                     new NodeId("node-2"),
                     nodeId,
                     "UNKNOWN_MESSAGE_TYPE",
-                    "some-payload"
+                    "some-payload",
+                    null
             );
             algorithm.onMessage(context, msg);
 
@@ -237,7 +242,8 @@ class FloodingLeaderElectionAlgorithmTest {
                     new NodeId("node-2"),
                     nodeId,
                     "LEADER_ANNOUNCEMENT",
-                    123 // Invalid payload (not a String)
+                    123, // Invalid payload (not a String)
+                    null
             );
             algorithm.onMessage(context, msg);
 
@@ -575,7 +581,8 @@ class FloodingLeaderElectionAlgorithmTest {
                         message.sender(),
                         target,
                         message.messageType(),
-                        message.payload()
+                        message.payload(),
+                        null
                 ));
             }
         }
