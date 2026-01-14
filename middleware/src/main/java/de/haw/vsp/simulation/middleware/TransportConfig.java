@@ -1,5 +1,8 @@
 package de.haw.vsp.simulation.middleware;
 
+import de.haw.vsp.simulation.core.NodeId;
+
+
 /**
  * Resolves node ids to concrete transport addresses.
  * <p>

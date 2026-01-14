@@ -1,4 +1,6 @@
 package de.haw.vsp.simulation.middleware;
+import de.haw.vsp.simulation.core.NodeId;
+import de.haw.vsp.simulation.core.SimulationMessage;
 
 import java.util.Set;
 
