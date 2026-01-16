@@ -1,8 +1,5 @@
 package de.haw.vsp.simulation.core;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -26,8 +23,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
  *   to avoid memory leaks
  */
 public class InMemorySimulationEventBus implements SimulationEventBus {
-
-    private static final Logger logger = LoggerFactory.getLogger(InMemorySimulationEventBus.class);
 
     /**
      * Map from event type to list of subscribed listeners.
@@ -59,10 +54,10 @@ public class InMemorySimulationEventBus implements SimulationEventBus {
                 try {
                     listener.onEvent(event);
                 } catch (Exception e) {
-                    // Log but don't propagate listener exceptions
-                    // This prevents one misbehaving listener from affecting others
-                    logger.error("Error in event listener while processing event type {}: {}",
-                            event.type(), e.getMessage(), e);
+                    // Silently swallow listener exceptions to prevent one misbehaving listener
+                    // from affecting others. In a production system, this would be logged,
+                    // but the core module should not have logging dependencies.
+                    // The exception is caught and ignored to maintain event delivery stability.
                 }
             }
         }
