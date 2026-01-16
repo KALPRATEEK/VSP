@@ -62,6 +62,11 @@ public class FloodingLeaderElectionAlgorithm implements NodeAlgorithm {
 
         NodeId announcedLeaderId = new NodeId((String) message.payload());
 
+        // Initialize current leader if not yet set (should not happen, but defensive)
+        if (currentLeaderId == null) {
+            currentLeaderId = context.self();
+        }
+
         // Compare announced leader with current leader
         if (announcedLeaderId.compareTo(currentLeaderId) > 0) {
             // Found a better leader - update and propagate

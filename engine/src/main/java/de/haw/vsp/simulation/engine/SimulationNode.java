@@ -24,6 +24,7 @@ public class SimulationNode implements Node {
     private final NodeAlgorithm algorithm;
     private final NodeContext nodeContext;
     private boolean started;
+    private boolean algorithmStarted;
 
     /**
      * Creates a new simulation node.
@@ -53,16 +54,18 @@ public class SimulationNode implements Node {
         this.algorithm = algorithm;
         this.nodeContext = nodeContext;
         this.started = false;
+        this.algorithmStarted = false;
     }
 
     @Override
     public void onStart() {
-        if (started) {
+        if (algorithmStarted) {
             throw new IllegalStateException(
                     "onStart() has already been called for node " + nodeId
             );
         }
         started = true;
+        algorithmStarted = true;
         algorithm.onStart(nodeContext);
     }
 
@@ -108,6 +111,19 @@ public class SimulationNode implements Node {
      */
     public boolean isStarted() {
         return started;
+    }
+
+    /**
+     * Marks the node as started without calling algorithm.onStart().
+     *
+     * This is used by the simulation engine to allow nodes to receive messages
+     * before their onStart() method is called, avoiding race conditions when
+     * nodes send messages during their own onStart() initialization.
+     *
+     * This method is package-private and should only be called by the simulation engine.
+     */
+    void markAsStarted() {
+        started = true;
     }
 }
 

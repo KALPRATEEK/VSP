@@ -85,16 +85,19 @@ class DefaultSimulationControlLoadConfigTest {
         // Act - equivalent manual steps
         SimulationId manualId = control.initializeNetwork(networkConfig);
         control.selectAlgorithm(manualId, algorithmId);
-        // Parameters are stored when startSimulation is called, but for comparison
-        // we can just verify the config matches after loadConfig
 
-        // Assert - both should result in equivalent configurations
+        // Assert - network and algorithm should match
         SimulationConfig loadedConfig = control.getCurrentConfig(loadedId);
         SimulationConfig manualConfig = control.getCurrentConfig(manualId);
 
         assertEquals(loadedConfig.networkConfig(), manualConfig.networkConfig());
         assertEquals(loadedConfig.algorithmId(), manualConfig.algorithmId());
-        assertEquals(loadedConfig.defaultParameters(), manualConfig.defaultParameters());
+
+        // Parameters differ: loadConfig stores the provided parameters,
+        // while manual steps result in default parameters
+        assertEquals(parameters, loadedConfig.defaultParameters());
+        // Manual config returns default parameters since none were explicitly set
+        assertNotEquals(parameters, manualConfig.defaultParameters());
     }
 
     @Test
@@ -119,13 +122,15 @@ class DefaultSimulationControlLoadConfigTest {
         control.startSimulation(simulationId, testConfig.defaultParameters());
 
         // Assert - simulation should be running
-        // Wait a bit and check metrics
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        // Poll metrics until simulation has started (indicated by positive real time)
+        MetricsSnapshot metrics = null;
+        for (int i = 0; i < 50; i++) {
+            metrics = control.getMetrics(simulationId);
+            if (metrics.realTimeMillis() > 0) {
+                break;
+            }
         }
-        MetricsSnapshot metrics = control.getMetrics(simulationId);
+        assertNotNull(metrics);
         assertTrue(metrics.realTimeMillis() >= 0);
     }
 
