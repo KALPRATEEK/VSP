@@ -18,10 +18,11 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * - Metrics (for aggregation)
  *
  * This record is immutable and fully JSON-serializable.
+ * The type is stored as EventType enum internally, but serialized as String for JSON compatibility.
  */
 public record SimulationEvent(
         @JsonProperty("timestamp") long timestamp,
-        @JsonProperty("type") String type,
+        @JsonProperty("type") EventType type,
         @JsonProperty("nodeId") String nodeId,
         @JsonProperty("peerId") String peerId,
         @JsonProperty("payloadSummary") String payloadSummary
@@ -31,7 +32,7 @@ public record SimulationEvent(
      * Canonical constructor with validation.
      *
      * @param timestamp      simulation time or wall-clock time in milliseconds
-     * @param type           event type identifier (must not be null or blank)
+     * @param type           event type (must not be null)
      * @param nodeId         ID of the node that generated the event (must not be null or blank)
      * @param peerId         ID of the peer node involved (may be null for non-message events)
      * @param payloadSummary short, UI-friendly summary of the event payload (must not be null)
@@ -39,11 +40,8 @@ public record SimulationEvent(
      */
     @JsonCreator
     public SimulationEvent {
-        if (type == null || type.isBlank()) {
-            throw new IllegalArgumentException(
-                    "type must not be null or blank, but was: " +
-                            (type == null ? "null" : "'" + type + "'")
-            );
+        if (type == null) {
+            throw new IllegalArgumentException("type must not be null");
         }
         if (nodeId == null || nodeId.isBlank()) {
             throw new IllegalArgumentException(
@@ -61,14 +59,14 @@ public record SimulationEvent(
      * Creates a SimulationEvent with no peer involvement.
      *
      * @param timestamp      simulation time or wall-clock time in milliseconds
-     * @param type           event type identifier
+     * @param type           event type
      * @param nodeId         ID of the node that generated the event
      * @param payloadSummary short, UI-friendly summary of the event payload
      * @return new SimulationEvent with peerId set to null
      */
     public static SimulationEvent withoutPeer(
             long timestamp,
-            String type,
+            EventType type,
             String nodeId,
             String payloadSummary
     ) {

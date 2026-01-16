@@ -35,7 +35,7 @@ class SimulationEventTest {
         void shouldCreateValidEventWithAllFields() {
             SimulationEvent event = new SimulationEvent(
                     1000L,
-                    "MESSAGE_SENT",
+                    EventType.MESSAGE_SENT,
                     "node-1",
                     "node-2",
                     "Election message: candidate=node-1"
@@ -43,7 +43,7 @@ class SimulationEventTest {
 
             assertNotNull(event);
             assertEquals(1000L, event.timestamp());
-            assertEquals("MESSAGE_SENT", event.type());
+            assertEquals(EventType.MESSAGE_SENT, event.type());
             assertEquals("node-1", event.nodeId());
             assertEquals("node-2", event.peerId());
             assertEquals("Election message: candidate=node-1", event.payloadSummary());
@@ -54,7 +54,7 @@ class SimulationEventTest {
         void shouldCreateValidEventWithNullPeerId() {
             SimulationEvent event = new SimulationEvent(
                     2000L,
-                    "STATE_CHANGED",
+                    EventType.STATE_CHANGED,
                     "node-3",
                     null,
                     "Became leader"
@@ -62,7 +62,7 @@ class SimulationEventTest {
 
             assertNotNull(event);
             assertEquals(2000L, event.timestamp());
-            assertEquals("STATE_CHANGED", event.type());
+            assertEquals(EventType.STATE_CHANGED, event.type());
             assertEquals("node-3", event.nodeId());
             assertNull(event.peerId());
             assertEquals("Became leader", event.payloadSummary());
@@ -73,14 +73,14 @@ class SimulationEventTest {
         void shouldCreateEventUsingWithoutPeerFactory() {
             SimulationEvent event = SimulationEvent.withoutPeer(
                     3000L,
-                    "SIMULATION_STARTED",
+                    EventType.STATE_CHANGED,
                     "node-0",
                     "Simulation initialized"
             );
 
             assertNotNull(event);
             assertEquals(3000L, event.timestamp());
-            assertEquals("SIMULATION_STARTED", event.type());
+            assertEquals(EventType.STATE_CHANGED, event.type());
             assertEquals("node-0", event.nodeId());
             assertNull(event.peerId());
             assertEquals("Simulation initialized", event.payloadSummary());
@@ -91,7 +91,7 @@ class SimulationEventTest {
         void shouldAllowEmptyPayloadSummary() {
             SimulationEvent event = new SimulationEvent(
                     1000L,
-                    "HEARTBEAT",
+                    EventType.MESSAGE_SENT,
                     "node-1",
                     "node-2",
                     ""
@@ -105,7 +105,7 @@ class SimulationEventTest {
         void shouldAllowNegativeTimestamp() {
             SimulationEvent event = new SimulationEvent(
                     -100L,
-                    "TEST_EVENT",
+                    EventType.ERROR,
                     "node-1",
                     null,
                     "Test"
@@ -119,7 +119,7 @@ class SimulationEventTest {
         void shouldAllowZeroTimestamp() {
             SimulationEvent event = new SimulationEvent(
                     0L,
-                    "INIT",
+                    EventType.STATE_CHANGED,
                     "node-0",
                     null,
                     "Initial event"
@@ -146,18 +146,12 @@ class SimulationEventTest {
             assertTrue(exception.getMessage().contains("null"));
         }
 
-        @ParameterizedTest
-        @NullAndEmptySource
-        @ValueSource(strings = {"", "   ", "\t", "\n"})
-        @DisplayName("should reject blank type")
-        void shouldRejectBlankType(String blankType) {
-            IllegalArgumentException exception = assertThrows(
-                    IllegalArgumentException.class,
-                    () -> new SimulationEvent(1000L, blankType, "node-1", "node-2", "payload")
-            );
-
-            assertTrue(exception.getMessage().contains("type"));
-            assertTrue(exception.getMessage().contains("null or blank"));
+        @Test
+        @DisplayName("should reject blank type - enum cannot be blank")
+        void shouldRejectBlankType() {
+            // Note: With EventType enum, blank types are not possible at compile time
+            // This test is kept for documentation but will always pass with enum
+            // The validation now only checks for null
         }
     }
 
@@ -170,7 +164,7 @@ class SimulationEventTest {
         void shouldRejectNullNodeId() {
             IllegalArgumentException exception = assertThrows(
                     IllegalArgumentException.class,
-                    () -> new SimulationEvent(1000L, "MESSAGE_SENT", null, "node-2", "payload")
+                    () -> new SimulationEvent(1000L, EventType.MESSAGE_SENT, null, "node-2", "payload")
             );
 
             assertTrue(exception.getMessage().contains("nodeId"));
@@ -185,7 +179,7 @@ class SimulationEventTest {
         void shouldRejectBlankNodeId(String blankNodeId) {
             IllegalArgumentException exception = assertThrows(
                     IllegalArgumentException.class,
-                    () -> new SimulationEvent(1000L, "MESSAGE_SENT", blankNodeId, "node-2", "payload")
+                    () -> new SimulationEvent(1000L, EventType.MESSAGE_SENT, blankNodeId, "node-2", "payload")
             );
 
             assertTrue(exception.getMessage().contains("nodeId"));
@@ -202,7 +196,7 @@ class SimulationEventTest {
         void shouldRejectNullPayloadSummary() {
             IllegalArgumentException exception = assertThrows(
                     IllegalArgumentException.class,
-                    () -> new SimulationEvent(1000L, "MESSAGE_SENT", "node-1", "node-2", null)
+                    () -> new SimulationEvent(1000L, EventType.MESSAGE_SENT, "node-1", "node-2", null)
             );
 
             assertTrue(exception.getMessage().contains("payloadSummary"));
@@ -219,7 +213,7 @@ class SimulationEventTest {
         void shouldAllowNullPeerIdForSystemEvents() {
             SimulationEvent event = new SimulationEvent(
                     1000L,
-                    "SYSTEM_ERROR",
+                    EventType.ERROR,
                     "node-1",
                     null,
                     "Network timeout"
@@ -233,7 +227,7 @@ class SimulationEventTest {
         void shouldAllowNullPeerIdForStateChanges() {
             SimulationEvent event = new SimulationEvent(
                     2000L,
-                    "STATE_CHANGED",
+                    EventType.STATE_CHANGED,
                     "node-5",
                     null,
                     "Transitioned to FOLLOWER"
@@ -247,7 +241,7 @@ class SimulationEventTest {
         void shouldAllowBlankPeerId() {
             SimulationEvent event = new SimulationEvent(
                     1000L,
-                    "BROADCAST",
+                    EventType.MESSAGE_SENT,
                     "node-1",
                     "",
                     "Broadcast message"
@@ -265,10 +259,10 @@ class SimulationEventTest {
         @DisplayName("should produce equal events with same fields")
         void shouldProduceEqualEventsWithSameFields() {
             SimulationEvent event1 = new SimulationEvent(
-                    1000L, "MESSAGE_SENT", "node-1", "node-2", "Election message"
+                    1000L, EventType.MESSAGE_SENT, "node-1", "node-2", "Election message"
             );
             SimulationEvent event2 = new SimulationEvent(
-                    1000L, "MESSAGE_SENT", "node-1", "node-2", "Election message"
+                    1000L, EventType.MESSAGE_SENT, "node-1", "node-2", "Election message"
             );
 
             assertEquals(event1, event2);
@@ -279,10 +273,10 @@ class SimulationEventTest {
         @DisplayName("should produce different events with different timestamps")
         void shouldProduceDifferentEventsWithDifferentTimestamps() {
             SimulationEvent event1 = new SimulationEvent(
-                    1000L, "MESSAGE_SENT", "node-1", "node-2", "payload"
+                    1000L, EventType.MESSAGE_SENT, "node-1", "node-2", "payload"
             );
             SimulationEvent event2 = new SimulationEvent(
-                    2000L, "MESSAGE_SENT", "node-1", "node-2", "payload"
+                    2000L, EventType.MESSAGE_SENT, "node-1", "node-2", "payload"
             );
 
             assertNotEquals(event1, event2);
@@ -292,10 +286,10 @@ class SimulationEventTest {
         @DisplayName("should produce different events with different types")
         void shouldProduceDifferentEventsWithDifferentTypes() {
             SimulationEvent event1 = new SimulationEvent(
-                    1000L, "MESSAGE_SENT", "node-1", "node-2", "payload"
+                    1000L, EventType.MESSAGE_SENT, "node-1", "node-2", "payload"
             );
             SimulationEvent event2 = new SimulationEvent(
-                    1000L, "MESSAGE_RECEIVED", "node-1", "node-2", "payload"
+                    1000L, EventType.MESSAGE_RECEIVED, "node-1", "node-2", "payload"
             );
 
             assertNotEquals(event1, event2);
@@ -306,10 +300,10 @@ class SimulationEventTest {
         void shouldProduceConsistentEventsAcrossSubsystems() {
             // Simulating event creation from different subsystems
             SimulationEvent fromNode = new SimulationEvent(
-                    5000L, "LEADER_ELECTED", "node-3", null, "Leader: node-3"
+                    5000L, EventType.LEADER_ELECTED, "node-3", null, "Leader: node-3"
             );
             SimulationEvent fromMetrics = new SimulationEvent(
-                    5000L, "LEADER_ELECTED", "node-3", null, "Leader: node-3"
+                    5000L, EventType.LEADER_ELECTED, "node-3", null, "Leader: node-3"
             );
 
             assertEquals(fromNode, fromMetrics);
@@ -325,7 +319,7 @@ class SimulationEventTest {
         void shouldSerializeEventWithAllFields() throws JsonProcessingException {
             SimulationEvent event = new SimulationEvent(
                     12345L,
-                    "MESSAGE_SENT",
+                    EventType.MESSAGE_SENT,
                     "node-1",
                     "node-2",
                     "Election: candidate=node-1, term=5"
@@ -346,7 +340,7 @@ class SimulationEventTest {
         void shouldSerializeEventWithNullPeerId() throws JsonProcessingException {
             SimulationEvent event = new SimulationEvent(
                     9999L,
-                    "STATE_CHANGED",
+                    EventType.STATE_CHANGED,
                     "node-7",
                     null,
                     "Became LEADER"
@@ -379,7 +373,7 @@ class SimulationEventTest {
 
             assertNotNull(event);
             assertEquals(12345L, event.timestamp());
-            assertEquals("MESSAGE_SENT", event.type());
+            assertEquals(EventType.MESSAGE_SENT, event.type());
             assertEquals("node-1", event.nodeId());
             assertEquals("node-2", event.peerId());
             assertEquals("Test message", event.payloadSummary());
@@ -402,7 +396,7 @@ class SimulationEventTest {
 
             assertNotNull(event);
             assertEquals(5000L, event.timestamp());
-            assertEquals("ERROR", event.type());
+            assertEquals(EventType.ERROR, event.type());
             assertEquals("node-3", event.nodeId());
             assertNull(event.peerId());
             assertEquals("Connection timeout", event.payloadSummary());
@@ -413,7 +407,7 @@ class SimulationEventTest {
         void shouldRoundtripJsonSerialization() throws JsonProcessingException {
             SimulationEvent original = new SimulationEvent(
                     99999L,
-                    "CONSENSUS_REACHED",
+                    EventType.LEADER_ELECTED,
                     "node-10",
                     "node-11",
                     "Value agreed: 42"
@@ -473,7 +467,7 @@ class SimulationEventTest {
         void shouldProvideUIFriendlyPayloadSummary() {
             SimulationEvent event = new SimulationEvent(
                     1000L,
-                    "MESSAGE_SENT",
+                    EventType.MESSAGE_SENT,
                     "node-1",
                     "node-2",
                     "Election message: candidate=node-1, term=3"
@@ -491,7 +485,7 @@ class SimulationEventTest {
         void shouldContainAllRequiredMetadataForLogging() {
             SimulationEvent event = new SimulationEvent(
                     System.currentTimeMillis(),
-                    "ERROR",
+                    EventType.ERROR,
                     "node-5",
                     null,
                     "Network partition detected"
@@ -508,13 +502,13 @@ class SimulationEventTest {
         @DisplayName("should support different event types consistently")
         void shouldSupportDifferentEventTypesConsistently() {
             SimulationEvent messageEvent = new SimulationEvent(
-                    1000L, "MESSAGE_SENT", "node-1", "node-2", "Election msg"
+                    1000L, EventType.MESSAGE_SENT, "node-1", "node-2", "Election msg"
             );
             SimulationEvent stateEvent = new SimulationEvent(
-                    2000L, "STATE_CHANGED", "node-3", null, "Became LEADER"
+                    2000L, EventType.STATE_CHANGED, "node-3", null, "Became LEADER"
             );
             SimulationEvent errorEvent = new SimulationEvent(
-                    3000L, "ERROR", "node-4", null, "Timeout"
+                    3000L, EventType.ERROR, "node-4", null, "Timeout"
             );
 
             // All events have consistent structure
@@ -542,20 +536,7 @@ class SimulationEventTest {
 
             String message = exception.getMessage();
             assertTrue(message.contains("type"), "Error message should mention 'type'");
-            assertTrue(message.contains("null or blank"), "Error message should explain requirement");
-        }
-
-        @Test
-        @DisplayName("should provide clear error message for blank type")
-        void shouldProvideCleanErrorMessageForBlankType() {
-            IllegalArgumentException exception = assertThrows(
-                    IllegalArgumentException.class,
-                    () -> new SimulationEvent(1000L, "   ", "node-1", "node-2", "payload")
-            );
-
-            String message = exception.getMessage();
-            assertTrue(message.contains("type"), "Error message should mention 'type'");
-            assertTrue(message.contains("null or blank"), "Error message should explain requirement");
+            assertTrue(message.contains("null"), "Error message should explain requirement");
         }
 
         @Test
@@ -563,7 +544,7 @@ class SimulationEventTest {
         void shouldProvideCleanErrorMessageForNullNodeId() {
             IllegalArgumentException exception = assertThrows(
                     IllegalArgumentException.class,
-                    () -> new SimulationEvent(1000L, "MESSAGE_SENT", null, "node-2", "payload")
+                    () -> new SimulationEvent(1000L, EventType.MESSAGE_SENT, null, "node-2", "payload")
             );
 
             String message = exception.getMessage();
@@ -576,7 +557,7 @@ class SimulationEventTest {
         void shouldProvideCleanErrorMessageForNullPayloadSummary() {
             IllegalArgumentException exception = assertThrows(
                     IllegalArgumentException.class,
-                    () -> new SimulationEvent(1000L, "MESSAGE_SENT", "node-1", "node-2", null)
+                    () -> new SimulationEvent(1000L, EventType.MESSAGE_SENT, "node-1", "node-2", null)
             );
 
             String message = exception.getMessage();
