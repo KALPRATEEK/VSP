@@ -9,6 +9,7 @@ import de.haw.vsp.simulation.engine.SimulationEngine;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 /**
@@ -26,7 +27,7 @@ public class DefaultSimulationControl implements SimulationControl {
     private final Map<SimulationId, NetworkConfig> networkConfigs;
     private final Map<SimulationId, String> algorithmIds;
     private final Map<SimulationId, SimulationParameters> simulationParameters;
-    private long simulationCounter;
+    private final AtomicLong simulationCounter;
 
     /**
      * Creates a new simulation control instance.
@@ -39,7 +40,7 @@ public class DefaultSimulationControl implements SimulationControl {
         this.networkConfigs = new ConcurrentHashMap<>();
         this.algorithmIds = new ConcurrentHashMap<>();
         this.simulationParameters = new ConcurrentHashMap<>();
-        this.simulationCounter = 0;
+        this.simulationCounter = new AtomicLong(0);
     }
 
     @Override
@@ -48,7 +49,7 @@ public class DefaultSimulationControl implements SimulationControl {
             throw new IllegalArgumentException("config must not be null");
         }
 
-        SimulationId simulationId = new SimulationId("sim-" + (++simulationCounter));
+        SimulationId simulationId = new SimulationId("sim-" + simulationCounter.incrementAndGet());
         SimulationEngine engine = new DefaultSimulationEngine();
         engine.createEngineAndNodes(config);
 
