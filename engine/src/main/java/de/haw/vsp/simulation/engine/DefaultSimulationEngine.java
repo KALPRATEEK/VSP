@@ -1,4 +1,4 @@
-﻿package de.haw.vsp.simulation.engine;
+pacakge de.haw.vsp.simulation.engine;
 
 import de.haw.vsp.simulation.core.EventType;
 import de.haw.vsp.simulation.core.MetricsSnapshot;
@@ -549,3 +549,4 @@ public class DefaultSimulationEngine implements SimulationEngine {
         STOPPED
     }
 }
+
