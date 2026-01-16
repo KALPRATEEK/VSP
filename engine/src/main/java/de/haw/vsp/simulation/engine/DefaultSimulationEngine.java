@@ -1,5 +1,6 @@
 package de.haw.vsp.simulation.engine;
 
+import de.haw.vsp.simulation.core.EventType;
 import de.haw.vsp.simulation.core.MetricsSnapshot;
 import de.haw.vsp.simulation.core.NetworkConfig;
 import de.haw.vsp.simulation.core.NodeId;
@@ -226,7 +227,7 @@ public class DefaultSimulationEngine implements SimulationEngine {
         // Publish start event
         publishEvent(SimulationEvent.withoutPeer(
                 System.currentTimeMillis(),
-                "SIMULATION_START",
+                EventType.STATE_CHANGED,
                 "system",
                 "Simulation started with " + nodes.size() + " nodes, maxSteps=" + parameters.maxSteps()
         ));
@@ -250,7 +251,7 @@ public class DefaultSimulationEngine implements SimulationEngine {
             // Publish node start event
             publishEvent(SimulationEvent.withoutPeer(
                     System.currentTimeMillis(),
-                    "NODE_START",
+                    EventType.STATE_CHANGED,
                     node.getNodeId().value(),
                     "Node started"
             ));
@@ -272,7 +273,7 @@ public class DefaultSimulationEngine implements SimulationEngine {
         // Publish pause event
         publishEvent(SimulationEvent.withoutPeer(
                 System.currentTimeMillis(),
-                "SIMULATION_PAUSE",
+                EventType.STATE_CHANGED,
                 "system",
                 "Simulation paused"
         ));
@@ -288,7 +289,7 @@ public class DefaultSimulationEngine implements SimulationEngine {
         // Publish resume event
         publishEvent(SimulationEvent.withoutPeer(
                 System.currentTimeMillis(),
-                "SIMULATION_RESUME",
+                EventType.STATE_CHANGED,
                 "system",
                 "Simulation resumed"
         ));
@@ -331,7 +332,7 @@ public class DefaultSimulationEngine implements SimulationEngine {
         // Publish stop event
         publishEvent(SimulationEvent.withoutPeer(
                 System.currentTimeMillis(),
-                "SIMULATION_STOP",
+                EventType.STATE_CHANGED,
                 "system",
                 "Simulation stopped after " + rounds.get() + " rounds"
         ));
@@ -400,7 +401,7 @@ public class DefaultSimulationEngine implements SimulationEngine {
                 // Max steps reached
                 publishEvent(SimulationEvent.withoutPeer(
                         System.currentTimeMillis(),
-                        "SIMULATION_MAX_STEPS_REACHED",
+                        EventType.STATE_CHANGED,
                         "system",
                         "Simulation reached maxSteps: " + simulationParameters.maxSteps()
                 ));
