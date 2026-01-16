@@ -9,6 +9,7 @@ import de.haw.vsp.simulation.engine.SimulationEngine;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
@@ -65,24 +66,33 @@ public class DefaultSimulationControl implements SimulationControl {
                 leaderIds.put(simulationId, leaderId);
             }
             // Also add to event stream
-            eventStreams.computeIfAbsent(simulationId, k -> new ArrayList<>()).add(event);
+            // Use CopyOnWriteArrayList for thread-safe concurrent writes and safe iteration
+            eventStreams.computeIfAbsent(simulationId, k -> new CopyOnWriteArrayList<>()).add(event);
         });
 
         // Subscribe to all other events to build event stream
         for (EventType eventType : EventType.values()) {
             if (eventType != EventType.LEADER_ELECTED) {
                 eventBus.subscribe(eventType, event -> {
-                    eventStreams.computeIfAbsent(simulationId, k -> new ArrayList<>()).add(event);
+                    // Use CopyOnWriteArrayList for thread-safe concurrent writes and safe iteration
+                    eventStreams.computeIfAbsent(simulationId, k -> new CopyOnWriteArrayList<>()).add(event);
                 });
             }
         }
 
-        simulations.put(simulationId, engine);
         // Note: eventStreams is initialized lazily via computeIfAbsent in event listeners
         // No need to put an empty list here, as it would overwrite any events published
         // between listener registration and this point, causing a race condition.
+        
+        // IMPORTANT: Add eventBus BEFORE adding simulation to prevent race condition:
+        // If another thread calls registerVisualizationListener between these operations,
+        // it would find the simulation in 'simulations' but not in 'eventBuses', causing
+        // an IllegalStateException. By adding eventBus first, registerVisualizationListener
+        // will either find both (if called after both operations) or neither (if called
+        // before both operations), which is the correct behavior.
         eventBuses.put(simulationId, eventBus);
         networkConfigs.put(simulationId, config);
+        simulations.put(simulationId, engine);
 
         return simulationId;
     }
