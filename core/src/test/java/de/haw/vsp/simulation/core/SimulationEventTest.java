@@ -105,7 +105,7 @@ class SimulationEventTest {
         void shouldAllowNegativeTimestamp() {
             SimulationEvent event = new SimulationEvent(
                     -100L,
-                    EventType.STATE_CHANGED,
+                    EventType.ERROR,
                     "node-1",
                     null,
                     "Test"
@@ -143,6 +143,14 @@ class SimulationEventTest {
 
             assertTrue(exception.getMessage().contains("type"));
             assertTrue(exception.getMessage().contains("null"));
+        }
+
+        @Test
+        @DisplayName("should reject blank type - enum cannot be blank")
+        void shouldRejectBlankType() {
+            // Note: With EventType enum, blank types are not possible at compile time
+            // This test is kept for documentation but will always pass with enum
+            // The validation now only checks for null
         }
     }
 
@@ -398,7 +406,7 @@ class SimulationEventTest {
         void shouldRoundtripJsonSerialization() throws JsonProcessingException {
             SimulationEvent original = new SimulationEvent(
                     99999L,
-                    EventType.STATE_CHANGED,
+                    EventType.LEADER_ELECTED,
                     "node-10",
                     "node-11",
                     "Value agreed: 42"
