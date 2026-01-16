@@ -93,7 +93,8 @@ class DefaultSimulationEngineSimulationLoopTest {
             
             // Check that maxSteps event was published
             boolean foundMaxStepsEvent = publishedEvents.stream()
-                    .anyMatch(e -> e.type().equals("SIMULATION_MAX_STEPS_REACHED"));
+                    .anyMatch(e -> e.type() == EventType.STATE_CHANGED && 
+                            e.payloadSummary().contains("maxSteps"));
             assertTrue(foundMaxStepsEvent, "Should publish maxSteps reached event");
         }
 
@@ -233,7 +234,8 @@ class DefaultSimulationEngineSimulationLoopTest {
             }
             
             boolean foundStartEvent = publishedEvents.stream()
-                    .anyMatch(e -> e.type().equals("SIMULATION_START"));
+                    .anyMatch(e -> e.type() == EventType.STATE_CHANGED && 
+                            e.payloadSummary().contains("Simulation started"));
             assertTrue(foundStartEvent, "Should publish start event");
         }
 
@@ -251,7 +253,8 @@ class DefaultSimulationEngineSimulationLoopTest {
             }
             
             long nodeStartEvents = publishedEvents.stream()
-                    .filter(e -> e.type().equals("NODE_START"))
+                    .filter(e -> e.type() == EventType.STATE_CHANGED && 
+                            e.payloadSummary().contains("Node started"))
                     .count();
             assertEquals(3, nodeStartEvents, "Should publish start event for each node");
         }
@@ -268,7 +271,8 @@ class DefaultSimulationEngineSimulationLoopTest {
             engine.pauseSimulation();
             
             boolean foundPauseEvent = publishedEvents.stream()
-                    .anyMatch(e -> e.type().equals("SIMULATION_PAUSE"));
+                    .anyMatch(e -> e.type() == EventType.STATE_CHANGED && 
+                            e.payloadSummary().contains("Simulation paused"));
             assertTrue(foundPauseEvent, "Should publish pause event");
         }
 
@@ -285,7 +289,8 @@ class DefaultSimulationEngineSimulationLoopTest {
             engine.resumeSimulation();
             
             boolean foundResumeEvent = publishedEvents.stream()
-                    .anyMatch(e -> e.type().equals("SIMULATION_RESUME"));
+                    .anyMatch(e -> e.type() == EventType.STATE_CHANGED && 
+                            e.payloadSummary().contains("Simulation resumed"));
             assertTrue(foundResumeEvent, "Should publish resume event");
         }
 
@@ -301,7 +306,8 @@ class DefaultSimulationEngineSimulationLoopTest {
             engine.stopSimulation();
             
             boolean foundStopEvent = publishedEvents.stream()
-                    .anyMatch(e -> e.type().equals("SIMULATION_STOP"));
+                    .anyMatch(e -> e.type() == EventType.STATE_CHANGED && 
+                            e.payloadSummary().contains("Simulation stopped"));
             assertTrue(foundStopEvent, "Should publish stop event");
         }
 
