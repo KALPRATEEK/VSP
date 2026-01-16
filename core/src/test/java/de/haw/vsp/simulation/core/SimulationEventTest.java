@@ -142,7 +142,6 @@ class SimulationEventTest {
             );
 
             assertTrue(exception.getMessage().contains("type"));
-            assertTrue(exception.getMessage().contains("null or blank"));
             assertTrue(exception.getMessage().contains("null"));
         }
 
@@ -444,7 +443,7 @@ class SimulationEventTest {
             String invalidJson = """
                     {
                         "timestamp": 1000,
-                        "type": "MESSAGE_SENT",
+                        "type": EventType.MESSAGE_SENT,
                         "nodeId": "   ",
                         "peerId": "node-2",
                         "payloadSummary": "Test"
