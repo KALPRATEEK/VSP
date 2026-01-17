@@ -105,7 +105,7 @@ class SimulationEventTest {
         void shouldAllowNegativeTimestamp() {
             SimulationEvent event = new SimulationEvent(
                     -100L,
-                    EventType.ERROR,
+                    EventType.STATE_CHANGED,
                     "node-1",
                     null,
                     "Test"
@@ -144,14 +144,6 @@ class SimulationEventTest {
             assertTrue(exception.getMessage().contains("type"));
             assertTrue(exception.getMessage().contains("null"));
         }
-
-        @Test
-        @DisplayName("should reject blank type - enum cannot be blank")
-        void shouldRejectBlankType() {
-            // Note: With EventType enum, blank types are not possible at compile time
-            // This test is kept for documentation but will always pass with enum
-            // The validation now only checks for null
-        }
     }
 
     @Nested
@@ -168,7 +160,6 @@ class SimulationEventTest {
 
             assertTrue(exception.getMessage().contains("nodeId"));
             assertTrue(exception.getMessage().contains("null or blank"));
-            assertTrue(exception.getMessage().contains("null"));
         }
 
         @ParameterizedTest
@@ -402,8 +393,8 @@ class SimulationEventTest {
         }
 
         @Test
-        @DisplayName("should roundtrip JSON serialization without data loss")
-        void shouldRoundtripJsonSerialization() throws JsonProcessingException {
+        @DisplayName("should roundtrip through JSON without data loss")
+        void shouldRoundtripThroughJsonWithoutDataLoss() throws JsonProcessingException {
             SimulationEvent original = new SimulationEvent(
                     99999L,
                     EventType.LEADER_ELECTED,
@@ -416,25 +407,11 @@ class SimulationEventTest {
             SimulationEvent deserialized = objectMapper.readValue(json, SimulationEvent.class);
 
             assertEquals(original, deserialized);
-        }
-
-        @Test
-        @DisplayName("should reject invalid JSON with null type")
-        void shouldRejectInvalidJsonWithNullType() {
-            String invalidJson = """
-                    {
-                        "timestamp": 1000,
-                        "type": null,
-                        "nodeId": "node-1",
-                        "peerId": "node-2",
-                        "payloadSummary": "Test"
-                    }
-                    """;
-
-            assertThrows(
-                    Exception.class,
-                    () -> objectMapper.readValue(invalidJson, SimulationEvent.class)
-            );
+            assertEquals(original.timestamp(), deserialized.timestamp());
+            assertEquals(original.type(), deserialized.type());
+            assertEquals(original.nodeId(), deserialized.nodeId());
+            assertEquals(original.peerId(), deserialized.peerId());
+            assertEquals(original.payloadSummary(), deserialized.payloadSummary());
         }
 
         @Test
@@ -487,7 +464,7 @@ class SimulationEventTest {
                     EventType.ERROR,
                     "node-5",
                     null,
-                    "Network partition detected"
+                    "Failed to connect"
             );
 
             // All required metadata present

@@ -459,25 +459,18 @@ class DefaultSimulationControlLifecycleTest {
             // Wait for simulation to start
             Thread.sleep(50);
             
+            // Get metrics before stopping
+            MetricsSnapshot beforeStop = control.getMetrics(simulationId);
+            assertNotNull(beforeStop);
+            
             control.stopSimulation(simulationId);
             
             // Wait a bit
             Thread.sleep(100);
             
-            Field simulationsField = DefaultSimulationControl.class.getDeclaredField("simulations");
-            simulationsField.setAccessible(true);
-            @SuppressWarnings("unchecked")
-            Map<SimulationId, SimulationEngine> simulations = 
-                (Map<SimulationId, SimulationEngine>) simulationsField.get(control);
-            
-            DefaultSimulationEngine engine = (DefaultSimulationEngine) simulations.get(simulationId);
-            
-            // State should remain STOPPED
-            assertEquals(DefaultSimulationEngine.SimulationState.STOPPED, engine.getState());
-            
-            // Metrics should be consistent
-            MetricsSnapshot metrics = engine.getMetrics();
-            assertNotNull(metrics);
+            // After stopSimulation, the simulation should be removed from the map
+            // So trying to access it should throw an exception
+            assertThrows(IllegalStateException.class, () -> control.getMetrics(simulationId));
         }
 
         @Test

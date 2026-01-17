@@ -1,7 +1,13 @@
 package de.haw.vsp.simulation.control;
 
+import de.haw.vsp.simulation.core.MetricsSnapshot;
 import de.haw.vsp.simulation.core.NetworkConfig;
+import de.haw.vsp.simulation.core.SimulationConfig;
 import de.haw.vsp.simulation.core.SimulationId;
+import de.haw.vsp.simulation.core.VisualizationListener;
+import de.haw.vsp.simulation.core.VisualizationSnapshot;
+
+import java.util.List;
 
 /**
  * Interface for simulation control operations.
@@ -96,4 +102,75 @@ public interface SimulationControl {
      * @throws IllegalStateException    if simulation is not found
      */
     void stopSimulation(SimulationId simulationId);
+
+    /**
+     * Gets the current visualization snapshot for a simulation.
+     *
+     * @param simulationId the simulation identifier (must not be null)
+     * @return the current visualization snapshot
+     * @throws IllegalArgumentException if simulationId is null
+     * @throws IllegalStateException if simulation is not found
+     */
+    VisualizationSnapshot getCurrentVisualization(SimulationId simulationId);
+
+    /**
+     * Registers a visualization listener to receive events.
+     *
+     * @param simulationId the simulation identifier (must not be null)
+     * @param listener the visualization listener (must not be null)
+     * @throws IllegalArgumentException if simulationId or listener is null
+     * @throws IllegalStateException if simulation is not found
+     */
+    void registerVisualizationListener(SimulationId simulationId, VisualizationListener listener);
+
+    /**
+     * Gets the current metrics for a simulation.
+     *
+     * @param simulationId the simulation identifier (must not be null)
+     * @return the current metrics snapshot
+     * @throws IllegalArgumentException if simulationId is null
+     * @throws IllegalStateException if simulation is not found
+     */
+    MetricsSnapshot getMetrics(SimulationId simulationId);
+
+    /**
+     * Loads a simulation configuration.
+     *
+     * @param config the simulation configuration (must not be null)
+     * @return the simulation identifier for the loaded configuration
+     * @throws IllegalArgumentException if config is null
+     */
+    SimulationId loadConfig(SimulationConfig config);
+
+    /**
+     * Gets the current configuration for a simulation.
+     *
+     * @param simulationId the simulation identifier (must not be null)
+     * @return the current simulation configuration
+     * @throws IllegalArgumentException if simulationId is null
+     * @throws IllegalStateException if simulation is not found
+     */
+    SimulationConfig getCurrentConfig(SimulationId simulationId);
+
+    /**
+     * Exports run data in the specified format.
+     *
+     * @param simulationId the simulation identifier (must not be null)
+     * @param format the export format (JSON or CSV) (must not be null or blank)
+     * @return the exported data as bytes
+     * @throws IllegalArgumentException if simulationId is null, format is null/blank, or format is unsupported
+     * @throws IllegalStateException if simulation is not found
+     */
+    byte[] exportRunData(SimulationId simulationId, String format);
+
+    /**
+     * Gets logs for a simulation with optional filtering.
+     *
+     * @param simulationId the simulation identifier (must not be null)
+     * @param filter optional filter string (may be null for all logs)
+     * @return list of log entries
+     * @throws IllegalArgumentException if simulationId is null
+     * @throws IllegalStateException if simulation is not found
+     */
+    List<String> getLogs(SimulationId simulationId, String filter);
 }

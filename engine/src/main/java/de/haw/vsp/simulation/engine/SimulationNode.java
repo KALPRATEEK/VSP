@@ -3,8 +3,6 @@ package de.haw.vsp.simulation.engine;
 import de.haw.vsp.simulation.core.NodeId;
 import de.haw.vsp.simulation.core.SimulationMessage;
 
-import java.util.ArrayDeque;
-import java.util.Queue;
 import java.util.Set;
 
 /**
@@ -25,9 +23,8 @@ public class SimulationNode implements Node {
     private final Set<NodeId> neighbors;
     private final NodeAlgorithm algorithm;
     private final NodeContext nodeContext;
-    private volatile boolean started;
-    private volatile boolean algorithmInitialized;
-    private final Queue<SimulationMessage> pendingMessages;
+    private boolean started;
+    private boolean algorithmStarted;
 
     /**
      * Creates a new simulation node.
@@ -57,66 +54,19 @@ public class SimulationNode implements Node {
         this.algorithm = algorithm;
         this.nodeContext = nodeContext;
         this.started = false;
-        this.algorithmInitialized = false;
-        this.pendingMessages = new ArrayDeque<>();
+        this.algorithmStarted = false;
     }
 
     @Override
     public void onStart() {
-        if (algorithmInitialized) {
+        if (algorithmStarted) {
             throw new IllegalStateException(
                     "onStart() has already been called for node " + nodeId
             );
         }
-        if (!started) {
-            started = true;
-        }
-        
-        // Initialize the algorithm
-        // Keep algorithmInitialized = false during onStart() execution so that
-        // any messages arriving during initialization will be buffered
-        boolean initializationSucceeded = false;
-        try {
-            algorithm.onStart(nodeContext);
-            initializationSucceeded = true;
-        } finally {
-            // Set algorithmInitialized in finally block to ensure it's always set,
-            // even if algorithm.onStart() throws an exception. This prevents
-            // re-initialization attempts and maintains idempotency.
-            // Messages arriving during onStart() are still buffered because
-            // onMessage() checks algorithmInitialized at the start of the method,
-            // before onStart() completes.
-            algorithmInitialized = true;
-        }
-        
-        // Process all pending messages that arrived before or during initialization
-        // Only process if initialization succeeded (no exception was thrown)
-        // If initialization failed, pending messages remain buffered but are not processed,
-        // as the algorithm is in an inconsistent state
-        if (initializationSucceeded) {
-            while (!pendingMessages.isEmpty()) {
-                SimulationMessage message = pendingMessages.poll();
-                algorithm.onMessage(nodeContext, message);
-            }
-        }
-    }
-
-    /**
-     * Marks this node as started without calling the algorithm's onStart().
-     * This is used during simulation initialization to allow nodes to receive
-     * messages before their onStart() is called, preventing race conditions
-     * when InMemoryMessagingPort delivers messages synchronously.
-     * 
-     * After calling this method, onStart() must still be called to initialize
-     * the algorithm.
-     */
-    void markAsStarted() {
-        if (started) {
-            throw new IllegalStateException(
-                    "Node " + nodeId + " is already marked as started"
-            );
-        }
         started = true;
+        algorithmStarted = true;
+        algorithm.onStart(nodeContext);
     }
 
     @Override
@@ -133,13 +83,6 @@ public class SimulationNode implements Node {
             throw new IllegalArgumentException("message must not be null");
         }
 
-        // If algorithm is not yet initialized, buffer the message for later processing
-        if (!algorithmInitialized) {
-            pendingMessages.offer(message);
-            return;
-        }
-
-        // Algorithm is initialized, process message immediately
         algorithm.onMessage(context, message);
     }
 
@@ -168,6 +111,19 @@ public class SimulationNode implements Node {
      */
     public boolean isStarted() {
         return started;
+    }
+
+    /**
+     * Marks the node as started without calling algorithm.onStart().
+     *
+     * This is used by the simulation engine to allow nodes to receive messages
+     * before their onStart() method is called, avoiding race conditions when
+     * nodes send messages during their own onStart() initialization.
+     *
+     * This method is package-private and should only be called by the simulation engine.
+     */
+    void markAsStarted() {
+        started = true;
     }
 }
 

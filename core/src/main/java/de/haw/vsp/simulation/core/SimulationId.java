@@ -9,12 +9,11 @@ import java.util.UUID;
  * Immutable identifier for a simulation instance.
  *
  * SimulationId uniquely identifies a simulation within the system.
- * It is used to reference simulations in control operations and to track
- * multiple concurrent simulations.
+ * It is used to address simulations in the SimulationControl API.
  *
  * This record is immutable and fully JSON-serializable.
  */
-public record SimulationId(@JsonValue String value) {
+public record SimulationId(@JsonValue String value) implements Comparable<SimulationId> {
 
     /**
      * Canonical constructor with validation.
@@ -39,6 +38,11 @@ public record SimulationId(@JsonValue String value) {
      */
     public static SimulationId generate() {
         return new SimulationId(UUID.randomUUID().toString());
+    }
+
+    @Override
+    public int compareTo(SimulationId other) {
+        return this.value.compareTo(other.value);
     }
 
     @Override

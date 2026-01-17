@@ -28,6 +28,8 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class DefaultSimulationEngine implements SimulationEngine {
 
+    private static final String SYSTEM_NODE_ID = "system";
+
     private final MessagingPort messagingPort;
     private SimulationEventPublisher eventPublisher;
     private Map<NodeId, SimulationNode> nodes;
@@ -228,7 +230,7 @@ public class DefaultSimulationEngine implements SimulationEngine {
         publishEvent(SimulationEvent.withoutPeer(
                 System.currentTimeMillis(),
                 EventType.STATE_CHANGED,
-                "system",
+                SYSTEM_NODE_ID,
                 "Simulation started with " + nodes.size() + " nodes, maxSteps=" + parameters.maxSteps()
         ));
 
@@ -274,7 +276,7 @@ public class DefaultSimulationEngine implements SimulationEngine {
         publishEvent(SimulationEvent.withoutPeer(
                 System.currentTimeMillis(),
                 EventType.STATE_CHANGED,
-                "system",
+                SYSTEM_NODE_ID,
                 "Simulation paused"
         ));
     }
@@ -290,7 +292,7 @@ public class DefaultSimulationEngine implements SimulationEngine {
         publishEvent(SimulationEvent.withoutPeer(
                 System.currentTimeMillis(),
                 EventType.STATE_CHANGED,
-                "system",
+                SYSTEM_NODE_ID,
                 "Simulation resumed"
         ));
         
@@ -313,12 +315,8 @@ public class DefaultSimulationEngine implements SimulationEngine {
                 // Wait for thread to terminate, with timeout
                 simulationThread.join(5000); // Wait up to 5 seconds
                 
-                // If thread is still alive after timeout, log warning but continue
+                // If thread is still alive after timeout, proceed anyway
                 // The thread is a daemon thread, so it won't prevent JVM shutdown
-                if (simulationThread.isAlive()) {
-                    System.err.println("Warning: Simulation thread did not terminate within timeout. " +
-                            "Proceeding with cleanup, but thread may still be running.");
-                }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 // If interrupted, still try to proceed with cleanup
@@ -333,7 +331,7 @@ public class DefaultSimulationEngine implements SimulationEngine {
         publishEvent(SimulationEvent.withoutPeer(
                 System.currentTimeMillis(),
                 EventType.STATE_CHANGED,
-                "system",
+                SYSTEM_NODE_ID,
                 "Simulation stopped after " + rounds.get() + " rounds"
         ));
         
@@ -359,59 +357,88 @@ public class DefaultSimulationEngine implements SimulationEngine {
         }
         
         simulationThread = new Thread(() -> {
-            while (!shouldStop.get() && currentStep.get() < simulationParameters.maxSteps()) {
-                // Check if paused
-                if (state == SimulationState.PAUSED) {
-                    try {
-                        Thread.sleep(100); // Wait while paused
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
-                    continue;
-                }
-                
-                // Check if still running
-                if (state != SimulationState.RUNNING) {
-                    break;
-                }
-                
-                // Execute one simulation step
-                executeSimulationStep();
-                
-                currentStep.incrementAndGet();
-                rounds.incrementAndGet();
-                simulatedTime.incrementAndGet();
-                
-                // Check for convergence (simplified - in real implementation, check algorithm state)
-                // For now, we'll assume convergence after a certain number of rounds
-                // This should be determined by the algorithm itself
-                
-                // Small delay to prevent CPU spinning and allow tests to check state
-                try {
-                    Thread.sleep(Math.max(1, simulationParameters.messageDelayMillis()));
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
+            boolean shouldContinue = true;
+            while (shouldContinue && !shouldStop.get() && currentStep.get() < simulationParameters.maxSteps()) {
+                shouldContinue = processSimulationCycle();
             }
-            
+
             // Simulation finished (either maxSteps reached or stopped)
-            if (currentStep.get() >= simulationParameters.maxSteps()) {
-                // Max steps reached
-                publishEvent(SimulationEvent.withoutPeer(
-                        System.currentTimeMillis(),
-                        EventType.STATE_CHANGED,
-                        "system",
-                        "Simulation reached maxSteps: " + simulationParameters.maxSteps()
-                ));
-                shouldStop.set(true);
-                state = SimulationState.STOPPED;
-            }
+            handleSimulationCompletion();
         });
-        
+
         simulationThread.setDaemon(true);
         simulationThread.start();
+    }
+
+    /**
+     * Processes one simulation cycle based on current state.
+     *
+     * @return true if simulation should continue, false otherwise
+     */
+    private boolean processSimulationCycle() {
+        if (state == SimulationState.PAUSED) {
+            return handlePausedState();
+        } else if (state == SimulationState.RUNNING) {
+            return handleRunningState();
+        } else {
+            // State is neither PAUSED nor RUNNING, exit loop
+            return false;
+        }
+    }
+
+    /**
+     * Handles simulation behavior when paused.
+     *
+     * @return true if simulation should continue, false if interrupted
+     */
+    private boolean handlePausedState() {
+        try {
+            Thread.sleep(100); // Wait while paused
+            return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    /**
+     * Handles simulation behavior when running.
+     *
+     * @return true if simulation should continue, false if interrupted
+     */
+    private boolean handleRunningState() {
+        // Execute one simulation step
+        executeSimulationStep();
+
+        currentStep.incrementAndGet();
+        rounds.incrementAndGet();
+        simulatedTime.incrementAndGet();
+
+        // Small delay to prevent CPU spinning and allow tests to check state
+        try {
+            Thread.sleep(Math.max(1, simulationParameters.messageDelayMillis()));
+            return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    /**
+     * Handles simulation completion (maxSteps reached or stopped).
+     */
+    private void handleSimulationCompletion() {
+        if (currentStep.get() >= simulationParameters.maxSteps()) {
+            // Max steps reached
+            publishEvent(SimulationEvent.withoutPeer(
+                    System.currentTimeMillis(),
+                    EventType.STATE_CHANGED,
+                    SYSTEM_NODE_ID,
+                    "Simulation reached maxSteps: " + simulationParameters.maxSteps()
+            ));
+            shouldStop.set(true);
+            state = SimulationState.STOPPED;
+        }
     }
     
     /**
@@ -449,8 +476,8 @@ public class DefaultSimulationEngine implements SimulationEngine {
             try {
                 eventPublisher.publish(event);
             } catch (Exception e) {
-                // Log but don't fail - event publishing should not break simulation
-                System.err.println("Warning: Error publishing event: " + e.getMessage());
+                // Silently ignore - event publishing should not break simulation
+                // In production, this would use proper logging
             }
         }
     }
@@ -529,6 +556,15 @@ public class DefaultSimulationEngine implements SimulationEngine {
         return nodes.size();
     }
 
+    @Override
+    public Map<NodeId, Set<NodeId>> getTopology() {
+        Map<NodeId, Set<NodeId>> topology = new HashMap<>();
+        for (SimulationNode node : nodes.values()) {
+            topology.put(node.getNodeId(), node.getNeighbors());
+        }
+        return Collections.unmodifiableMap(topology);
+    }
+
     /**
      * Enumeration of simulation states.
      */
@@ -540,3 +576,4 @@ public class DefaultSimulationEngine implements SimulationEngine {
         STOPPED
     }
 }
+

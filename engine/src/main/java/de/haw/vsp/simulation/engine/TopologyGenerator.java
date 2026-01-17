@@ -7,24 +7,31 @@ import de.haw.vsp.simulation.core.TopologyType;
 import java.util.*;
 
 /**
- * Utility class for generating network topologies.
+ * Utility class for generating network topologies based on NetworkConfig.
  *
- * Creates node IDs and neighbor relationships based on NetworkConfig.
- * Supports LINE, RING, GRID, and RANDOM topology types.
+ * Supports the following topology types:
+ * - LINE: nodes connected in a line (0-1-2-3-...)
+ * - RING: nodes connected in a ring (0-1-2-3-...-n-0)
+ * - GRID: nodes connected in a 2D grid
+ * - RANDOM: nodes connected randomly
  */
-public class TopologyGenerator {
+final class TopologyGenerator {
+
+    private static final String NODE_PREFIX = "node-";
+    private static final Random RANDOM = new Random();
+
+    private TopologyGenerator() {
+        // Utility class
+    }
 
     /**
-     * Generates a topology map from a NetworkConfig.
+     * Generates a topology map based on the given network configuration.
      *
-     * The returned map contains an entry for each node ID, mapping it to
-     * its set of neighbor node IDs according to the specified topology type.
-     *
-     * @param config the network configuration (must not be null)
-     * @return a map from node ID to set of neighbor node IDs
-     * @throws IllegalArgumentException if config is null or invalid
+     * @param config the network configuration
+     * @return a map from NodeId to its set of neighbor NodeIds
+     * @throws IllegalArgumentException if config is null
      */
-    public static Map<NodeId, Set<NodeId>> generateTopology(NetworkConfig config) {
+    static Map<NodeId, Set<NodeId>> generateTopology(NetworkConfig config) {
         if (config == null) {
             throw new IllegalArgumentException("config must not be null");
         }
@@ -32,139 +39,186 @@ public class TopologyGenerator {
         int nodeCount = config.nodeCount();
         TopologyType topologyType = config.topologyType();
 
-        if (nodeCount <= 0) {
-            throw new IllegalArgumentException("nodeCount must be greater than 0, but was: " + nodeCount);
-        }
-        if (topologyType == null) {
-            throw new IllegalArgumentException("topologyType must not be null");
-        }
+        return switch (topologyType) {
+            case LINE -> generateLineTopology(nodeCount);
+            case RING -> generateRingTopology(nodeCount);
+            case GRID -> generateGridTopology(nodeCount);
+            case RANDOM -> generateRandomTopology(nodeCount);
+        };
+    }
 
-        // Generate node IDs
-        List<NodeId> nodeIds = new ArrayList<>();
-        for (int i = 0; i < nodeCount; i++) {
-            nodeIds.add(new NodeId(String.valueOf(i)));
-        }
-
-        // Generate topology based on type
+    /**
+     * Generates a line topology: 0-1-2-3-...-n
+     *
+     * Each node (except endpoints) has exactly 2 neighbors.
+     * Endpoints have 1 neighbor.
+     */
+    private static Map<NodeId, Set<NodeId>> generateLineTopology(int nodeCount) {
         Map<NodeId, Set<NodeId>> topology = new HashMap<>();
-        switch (topologyType) {
-            case LINE:
-                generateLineTopology(nodeIds, topology);
-                break;
-            case RING:
-                generateRingTopology(nodeIds, topology);
-                break;
-            case GRID:
-                generateGridTopology(nodeIds, topology);
-                break;
-            case RANDOM:
-                generateRandomTopology(nodeIds, topology);
-                break;
-            default:
-                throw new IllegalArgumentException("Unsupported topology type: " + topologyType);
+
+        for (int i = 0; i < nodeCount; i++) {
+            NodeId nodeId = new NodeId(NODE_PREFIX + i);
+            Set<NodeId> neighbors = new HashSet<>();
+
+            if (i > 0) {
+                neighbors.add(new NodeId(NODE_PREFIX + (i - 1)));
+            }
+            if (i < nodeCount - 1) {
+                neighbors.add(new NodeId(NODE_PREFIX + (i + 1)));
+            }
+
+            topology.put(nodeId, neighbors);
         }
 
         return topology;
     }
 
     /**
-     * Generates a line topology: nodes connected in a linear chain.
-     * Node 0 connects to node 1, node 1 connects to nodes 0 and 2, etc.
+     * Generates a ring topology: 0-1-2-3-...-n-0
+     *
+     * Each node has exactly 2 neighbors (including wraparound).
      */
-    private static void generateLineTopology(List<NodeId> nodeIds, Map<NodeId, Set<NodeId>> topology) {
-        for (int i = 0; i < nodeIds.size(); i++) {
-            Set<NodeId> neighbors = new HashSet<>();
-            if (i > 0) {
-                neighbors.add(nodeIds.get(i - 1));
-            }
-            if (i < nodeIds.size() - 1) {
-                neighbors.add(nodeIds.get(i + 1));
-            }
-            topology.put(nodeIds.get(i), neighbors);
-        }
-    }
-
-    /**
-     * Generates a ring topology: nodes connected in a circular chain.
-     * Each node connects to its immediate neighbors, with the last node
-     * connecting back to the first.
-     */
-    private static void generateRingTopology(List<NodeId> nodeIds, Map<NodeId, Set<NodeId>> topology) {
-        for (int i = 0; i < nodeIds.size(); i++) {
-            Set<NodeId> neighbors = new HashSet<>();
-            int prev = (i - 1 + nodeIds.size()) % nodeIds.size();
-            int next = (i + 1) % nodeIds.size();
-            neighbors.add(nodeIds.get(prev));
-            neighbors.add(nodeIds.get(next));
-            topology.put(nodeIds.get(i), neighbors);
-        }
-    }
-
-    /**
-     * Generates a grid topology: nodes arranged in a 2D grid.
-     * For simplicity, we create a square grid (or as close as possible).
-     * Each node connects to its horizontal and vertical neighbors.
-     */
-    private static void generateGridTopology(List<NodeId> nodeIds, Map<NodeId, Set<NodeId>> topology) {
-        int nodeCount = nodeIds.size();
-        int cols = (int) Math.ceil(Math.sqrt(nodeCount));
-        int rows = (int) Math.ceil((double) nodeCount / cols);
+    private static Map<NodeId, Set<NodeId>> generateRingTopology(int nodeCount) {
+        Map<NodeId, Set<NodeId>> topology = new HashMap<>();
 
         for (int i = 0; i < nodeCount; i++) {
+            NodeId nodeId = new NodeId(NODE_PREFIX + i);
             Set<NodeId> neighbors = new HashSet<>();
+
+            int prev = (i - 1 + nodeCount) % nodeCount;
+            int next = (i + 1) % nodeCount;
+
+            neighbors.add(new NodeId(NODE_PREFIX + prev));
+            neighbors.add(new NodeId(NODE_PREFIX + next));
+
+            topology.put(nodeId, neighbors);
+        }
+
+        return topology;
+    }
+
+    /**
+     * Generates a grid topology.
+     *
+     * Nodes are arranged in a rectangular grid.
+     * Each node has up to 4 neighbors (north, south, east, west).
+     */
+    private static Map<NodeId, Set<NodeId>> generateGridTopology(int nodeCount) {
+        Map<NodeId, Set<NodeId>> topology = new HashMap<>();
+
+        // Calculate grid dimensions (try to make it as square as possible)
+        int rows = (int) Math.sqrt(nodeCount);
+        int cols = (nodeCount + rows - 1) / rows;
+
+        for (int i = 0; i < nodeCount; i++) {
+            NodeId nodeId = new NodeId(NODE_PREFIX + i);
+            Set<NodeId> neighbors = new HashSet<>();
+
             int row = i / cols;
             int col = i % cols;
 
-            // Left neighbor
-            if (col > 0 && (row * cols + col - 1) < nodeCount) {
-                neighbors.add(nodeIds.get(row * cols + col - 1));
-            }
-            // Right neighbor
-            if (col < cols - 1 && (row * cols + col + 1) < nodeCount) {
-                neighbors.add(nodeIds.get(row * cols + col + 1));
-            }
-            // Top neighbor
-            if (row > 0 && ((row - 1) * cols + col) < nodeCount) {
-                neighbors.add(nodeIds.get((row - 1) * cols + col));
-            }
-            // Bottom neighbor
-            if (row < rows - 1 && ((row + 1) * cols + col) < nodeCount) {
-                neighbors.add(nodeIds.get((row + 1) * cols + col));
-            }
+            addGridNeighbors(neighbors, i, row, col, rows, cols, nodeCount);
 
-            topology.put(nodeIds.get(i), neighbors);
+            topology.put(nodeId, neighbors);
+        }
+
+        return topology;
+    }
+
+    /**
+     * Adds all valid neighbors for a grid node.
+     */
+    private static void addGridNeighbors(Set<NodeId> neighbors, int nodeIndex, int row, int col,
+                                         int rows, int cols, int nodeCount) {
+        addNorthNeighbor(neighbors, row, col, cols, nodeCount);
+        addSouthNeighbor(neighbors, row, col, rows, cols, nodeCount);
+        addWestNeighbor(neighbors, col, nodeIndex);
+        addEastNeighbor(neighbors, col, cols, nodeIndex, nodeCount);
+    }
+
+    /**
+     * Adds north neighbor if valid.
+     */
+    private static void addNorthNeighbor(Set<NodeId> neighbors, int row, int col, int cols, int nodeCount) {
+        if (row > 0) {
+            int northIdx = (row - 1) * cols + col;
+            if (northIdx < nodeCount) {
+                neighbors.add(new NodeId(NODE_PREFIX + northIdx));
+            }
         }
     }
 
     /**
-     * Generates a random topology: each node connects to a random subset of other nodes.
-     * For simplicity, we ensure connectivity by creating a minimum spanning tree first,
-     * then adding random edges.
+     * Adds south neighbor if valid.
      */
-    private static void generateRandomTopology(List<NodeId> nodeIds, Map<NodeId, Set<NodeId>> topology) {
-        Random random = new Random(42); // Fixed seed for reproducibility
+    private static void addSouthNeighbor(Set<NodeId> neighbors, int row, int col, int rows, int cols, int nodeCount) {
+        if (row < rows - 1) {
+            int southIdx = (row + 1) * cols + col;
+            if (southIdx < nodeCount) {
+                neighbors.add(new NodeId(NODE_PREFIX + southIdx));
+            }
+        }
+    }
+
+    /**
+     * Adds west neighbor if valid.
+     */
+    private static void addWestNeighbor(Set<NodeId> neighbors, int col, int nodeIndex) {
+        if (col > 0) {
+            neighbors.add(new NodeId(NODE_PREFIX + (nodeIndex - 1)));
+        }
+    }
+
+    /**
+     * Adds east neighbor if valid.
+     */
+    private static void addEastNeighbor(Set<NodeId> neighbors, int col, int cols, int nodeIndex, int nodeCount) {
+        if (col < cols - 1 && nodeIndex + 1 < nodeCount) {
+            neighbors.add(new NodeId(NODE_PREFIX + (nodeIndex + 1)));
+        }
+    }
+
+    /**
+     * Generates a random topology.
+     *
+     * Each node is connected to a random subset of other nodes.
+     * Ensures that the graph is connected.
+     */
+    private static Map<NodeId, Set<NodeId>> generateRandomTopology(int nodeCount) {
+        Map<NodeId, Set<NodeId>> topology = new HashMap<>();
 
         // Initialize all nodes with empty neighbor sets
-        for (NodeId nodeId : nodeIds) {
+        List<NodeId> nodeIds = new ArrayList<>();
+        for (int i = 0; i < nodeCount; i++) {
+            NodeId nodeId = new NodeId(NODE_PREFIX + i);
+            nodeIds.add(nodeId);
             topology.put(nodeId, new HashSet<>());
         }
 
-        // First, create a minimum spanning tree to ensure connectivity
-        // Use a simple approach: connect each node to a random previous node
-        for (int i = 1; i < nodeIds.size(); i++) {
-            int connectTo = random.nextInt(i);
-            topology.get(nodeIds.get(i)).add(nodeIds.get(connectTo));
-            topology.get(nodeIds.get(connectTo)).add(nodeIds.get(i));
+        // Ensure connectivity: create a spanning tree first
+        for (int i = 1; i < nodeCount; i++) {
+            int parentIdx = RANDOM.nextInt(i);
+            addBidirectionalEdge(topology, nodeIds.get(i), nodeIds.get(parentIdx));
         }
 
-        // Then add random edges (each node has a 30% chance to connect to each other node)
-        for (int i = 0; i < nodeIds.size(); i++) {
-            for (int j = i + 1; j < nodeIds.size(); j++) {
-                if (random.nextDouble() < 0.3) {
-                    topology.get(nodeIds.get(i)).add(nodeIds.get(j));
-                    topology.get(nodeIds.get(j)).add(nodeIds.get(i));
-                }
+        // Add additional random edges
+        int additionalEdges = RANDOM.nextInt(nodeCount);
+        for (int i = 0; i < additionalEdges; i++) {
+            int idx1 = RANDOM.nextInt(nodeCount);
+            int idx2 = RANDOM.nextInt(nodeCount);
+            if (idx1 != idx2) {
+                addBidirectionalEdge(topology, nodeIds.get(idx1), nodeIds.get(idx2));
             }
         }
+
+        return topology;
+    }
+
+    /**
+     * Adds a bidirectional edge between two nodes.
+     */
+    private static void addBidirectionalEdge(Map<NodeId, Set<NodeId>> topology, NodeId node1, NodeId node2) {
+        topology.get(node1).add(node2);
+        topology.get(node2).add(node1);
     }
 }

@@ -1,8 +1,13 @@
 package de.haw.vsp.simulation.engine;
 
+import de.haw.vsp.simulation.core.MetricsSnapshot;
 import de.haw.vsp.simulation.core.NetworkConfig;
+import de.haw.vsp.simulation.core.NodeId;
 import de.haw.vsp.simulation.core.SimulationEventPublisher;
 import de.haw.vsp.simulation.core.SimulationParameters;
+
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Interface for simulation engine operations.
@@ -15,6 +20,7 @@ import de.haw.vsp.simulation.core.SimulationParameters;
  * - Algorithm configuration
  * - Simulation lifecycle control (start, pause, resume, stop)
  * - Event publishing integration
+ * - Metrics and topology access
  */
 public interface SimulationEngine {
 
@@ -82,4 +88,26 @@ public interface SimulationEngine {
      * @param eventPublisher the event publisher (may be null to disable event publishing)
      */
     void setEventPublisher(SimulationEventPublisher eventPublisher);
+
+    /**
+     * Gets the current metrics snapshot.
+     *
+     * @return current metrics snapshot
+     */
+    MetricsSnapshot getMetrics();
+
+    /**
+     * Gets the topology of the network.
+     * Returns a map from node ID to set of neighbor node IDs.
+     *
+     * @return map from node ID to set of neighbor IDs (read-only)
+     */
+    Map<NodeId, Set<NodeId>> getTopology();
+
+    /**
+     * Gets the number of nodes in the simulation.
+     *
+     * @return number of nodes
+     */
+    int getNodeCount();
 }
