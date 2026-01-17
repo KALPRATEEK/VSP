@@ -73,14 +73,14 @@ class SimulationEventTest {
         void shouldCreateEventUsingWithoutPeerFactory() {
             SimulationEvent event = SimulationEvent.withoutPeer(
                     3000L,
-                    EventType.ERROR,
+                    EventType.STATE_CHANGED,
                     "node-0",
                     "Simulation initialized"
             );
 
             assertNotNull(event);
             assertEquals(3000L, event.timestamp());
-            assertEquals(EventType.ERROR, event.type());
+            assertEquals(EventType.STATE_CHANGED, event.type());
             assertEquals("node-0", event.nodeId());
             assertNull(event.peerId());
             assertEquals("Simulation initialized", event.payloadSummary());
@@ -91,7 +91,7 @@ class SimulationEventTest {
         void shouldAllowEmptyPayloadSummary() {
             SimulationEvent event = new SimulationEvent(
                     1000L,
-                    EventType.MESSAGE_RECEIVED,
+                    EventType.MESSAGE_SENT,
                     "node-1",
                     "node-2",
                     ""
@@ -119,7 +119,7 @@ class SimulationEventTest {
         void shouldAllowZeroTimestamp() {
             SimulationEvent event = new SimulationEvent(
                     0L,
-                    EventType.LEADER_ELECTED,
+                    EventType.STATE_CHANGED,
                     "node-0",
                     null,
                     "Initial event"
@@ -396,11 +396,11 @@ class SimulationEventTest {
         @DisplayName("should roundtrip through JSON without data loss")
         void shouldRoundtripThroughJsonWithoutDataLoss() throws JsonProcessingException {
             SimulationEvent original = new SimulationEvent(
-                    9999L,
-                    EventType.STATE_CHANGED,
-                    "node-7",
-                    "node-8",
-                    "Complex payload: key=value, status=active"
+                    99999L,
+                    EventType.LEADER_ELECTED,
+                    "node-10",
+                    "node-11",
+                    "Value agreed: 42"
             );
 
             String json = objectMapper.writeValueAsString(original);
@@ -420,7 +420,7 @@ class SimulationEventTest {
             String invalidJson = """
                     {
                         "timestamp": 1000,
-                        "type": "MESSAGE_SENT",
+                        "type": EventType.MESSAGE_SENT,
                         "nodeId": "   ",
                         "peerId": "node-2",
                         "payloadSummary": "Test"

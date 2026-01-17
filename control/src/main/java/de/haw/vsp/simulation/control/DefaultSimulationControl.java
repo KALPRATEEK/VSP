@@ -10,7 +10,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 /**
@@ -28,7 +27,6 @@ public class DefaultSimulationControl implements SimulationControl {
     private final Map<SimulationId, NetworkConfig> networkConfigs;
     private final Map<SimulationId, String> algorithmIds;
     private final Map<SimulationId, SimulationParameters> simulationParameters;
-    private final AtomicLong simulationCounter;
 
     /**
      * Creates a new simulation control instance.
@@ -41,7 +39,6 @@ public class DefaultSimulationControl implements SimulationControl {
         this.networkConfigs = new ConcurrentHashMap<>();
         this.algorithmIds = new ConcurrentHashMap<>();
         this.simulationParameters = new ConcurrentHashMap<>();
-        this.simulationCounter = new AtomicLong(0);
     }
 
     @Override
@@ -50,7 +47,7 @@ public class DefaultSimulationControl implements SimulationControl {
             throw new IllegalArgumentException("config must not be null");
         }
 
-        SimulationId simulationId = new SimulationId("sim-" + simulationCounter.incrementAndGet());
+        SimulationId simulationId = SimulationId.generate();
         SimulationEngine engine = new DefaultSimulationEngine();
         engine.createEngineAndNodes(config);
 
@@ -109,6 +106,22 @@ public class DefaultSimulationControl implements SimulationControl {
         SimulationEngine engine = simulations.get(simulationId);
         if (engine == null) {
             throw new IllegalStateException("Simulation not found: " + simulationId);
+        }
+
+        // Check if simulation is running or paused - cannot change algorithm in these states
+        if (engine instanceof de.haw.vsp.simulation.engine.DefaultSimulationEngine) {
+            de.haw.vsp.simulation.engine.DefaultSimulationEngine defaultEngine =
+                (de.haw.vsp.simulation.engine.DefaultSimulationEngine) engine;
+            de.haw.vsp.simulation.engine.DefaultSimulationEngine.SimulationState state = defaultEngine.getState();
+
+            if (state == de.haw.vsp.simulation.engine.DefaultSimulationEngine.SimulationState.RUNNING) {
+                throw new IllegalStateException(
+                    "Algorithm cannot be changed while simulation is running. Stop the simulation first.");
+            }
+            if (state == de.haw.vsp.simulation.engine.DefaultSimulationEngine.SimulationState.PAUSED) {
+                throw new IllegalStateException(
+                    "Algorithm cannot be changed while simulation is running or paused. Stop the simulation first.");
+            }
         }
 
         engine.configureAlgorithm(algorithmId);
