@@ -22,4 +22,3 @@ public enum EventType {
     LEADER_ELECTED,
     ERROR
 }
-

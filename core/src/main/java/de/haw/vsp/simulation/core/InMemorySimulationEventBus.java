@@ -97,4 +97,3 @@ public class InMemorySimulationEventBus implements SimulationEventBus {
         }
     }
 }
-

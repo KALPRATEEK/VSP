@@ -63,4 +63,3 @@ public interface SimulationEventBus extends SimulationEventPublisher {
      */
     void unsubscribe(EventType type, SimulationEventListener listener);
 }
-

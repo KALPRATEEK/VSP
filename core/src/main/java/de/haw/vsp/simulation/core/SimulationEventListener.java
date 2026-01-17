@@ -33,4 +33,3 @@ public interface SimulationEventListener {
      */
     void onEvent(SimulationEvent event);
 }
-
