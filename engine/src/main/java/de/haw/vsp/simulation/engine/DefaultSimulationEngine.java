@@ -111,24 +111,7 @@ public class DefaultSimulationEngine implements SimulationEngine {
 
             // Register message handler
             final SimulationNode finalNode = node;
-            messagingPort.registerHandler(
-                    new de.haw.vsp.simulation.middleware.NodeId(nodeId.value()),
-                    message -> {
-                        // Convert middleware message to core message
-                        de.haw.vsp.simulation.core.NodeId senderNodeId =
-                                new de.haw.vsp.simulation.core.NodeId(message.sender().value());
-                        de.haw.vsp.simulation.core.NodeId receiverNodeId =
-                                new de.haw.vsp.simulation.core.NodeId(message.receiver().value());
-                        de.haw.vsp.simulation.core.SimulationMessage coreMessage =
-                                new de.haw.vsp.simulation.core.SimulationMessage(
-                                        senderNodeId,
-                                        receiverNodeId,
-                                        message.type(),
-                                        message.payload() != null ? message.payload().toString() : null
-                                );
-                        finalNode.onMessage(nodeContext, coreMessage);
-                    }
-            );
+            messagingPort.registerHandler(nodeId, msg -> finalNode.onMessage(nodeContext, msg));
 
             newNodes.put(nodeId, node);
         }
@@ -155,7 +138,7 @@ public class DefaultSimulationEngine implements SimulationEngine {
         if (!nodes.isEmpty()) {
             // Unregister old handlers first
             for (NodeId nodeId : nodes.keySet()) {
-                messagingPort.unregisterHandler(new de.haw.vsp.simulation.middleware.NodeId(nodeId.value()));
+                messagingPort.unregisterHandler(nodeId);
             }
             
             // Get current topology
@@ -176,24 +159,7 @@ public class DefaultSimulationEngine implements SimulationEngine {
 
                 // Register message handler for the new node
                 final SimulationNode finalNode = node;
-                messagingPort.registerHandler(
-                        new de.haw.vsp.simulation.middleware.NodeId(nodeId.value()),
-                        message -> {
-                            // Convert middleware message to core message
-                            de.haw.vsp.simulation.core.NodeId senderNodeId =
-                                    new de.haw.vsp.simulation.core.NodeId(message.sender().value());
-                            de.haw.vsp.simulation.core.NodeId receiverNodeId =
-                                    new de.haw.vsp.simulation.core.NodeId(message.receiver().value());
-                            de.haw.vsp.simulation.core.SimulationMessage coreMessage =
-                                    new de.haw.vsp.simulation.core.SimulationMessage(
-                                            senderNodeId,
-                                            receiverNodeId,
-                                            message.type(),
-                                            message.payload() != null ? message.payload().toString() : null
-                                    );
-                            finalNode.onMessage(nodeContext, coreMessage);
-                        }
-                );
+                messagingPort.registerHandler(nodeId, msg -> finalNode.onMessage(nodeContext, msg));
 
                 newNodes.put(nodeId, node);
             }
@@ -241,7 +207,11 @@ public class DefaultSimulationEngine implements SimulationEngine {
         // as started before calling onStart() on any of them.
         // This ensures that when Node A sends a message to Node B during A's onStart(),
         // Node B can process the message even though B's onStart() hasn't been called yet.
-        
+        // Note: Messaging is asynchronous; messages triggered by node.onStart() may arrive quickly.
+        // To prevent IllegalStateException when a node receives messages before its onStart() ran,
+        // we mark all nodes as started before calling onStart() on any of them.
+
+
         // Phase 1: Mark all nodes as started (allows them to receive messages)
         for (SimulationNode node : nodes.values()) {
             node.markAsStarted();
@@ -344,6 +314,12 @@ public class DefaultSimulationEngine implements SimulationEngine {
     @Override
     public void setEventPublisher(SimulationEventPublisher eventPublisher) {
         this.eventPublisher = eventPublisher;
+
+        // If we are using the shared in-memory middleware, forward the publisher
+        // so message events/errors can be observed via the UI.
+        if (messagingPort instanceof InMemoryMessagingPort inMem) {
+            inMem.setEventPublisher(eventPublisher);
+        }
     }
 
     /**
@@ -530,8 +506,9 @@ public class DefaultSimulationEngine implements SimulationEngine {
     private void cleanup() {
         // Unregister all handlers
         for (NodeId nodeId : nodes.keySet()) {
-            messagingPort.unregisterHandler(new de.haw.vsp.simulation.middleware.NodeId(nodeId.value()));
+            messagingPort.unregisterHandler(nodeId);
         }
+
 
         // Clear nodes
         nodes.clear();
