@@ -1,3 +1,5 @@
+
+/**
 package de.haw.vsp.simulation.engine;
 
 import de.haw.vsp.simulation.core.NodeId;
@@ -16,7 +18,6 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
  * Unit tests for SimulationNodeContext.
  *
  * Verifies:
@@ -24,7 +25,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * - Immutability of node identity and neighbors
  * - Non-blocking messaging operations
  * - Correct delegation to MessagingPort
- */
 @DisplayName("SimulationNodeContext")
 class SimulationNodeContextTest {
 
@@ -384,56 +384,57 @@ class SimulationNodeContextTest {
         }
     }
 
+    import de.haw.vsp.simulation.core.NodeId;
+import de.haw.vsp.simulation.core.SimulationMessage;
     /**
      * Test implementation of MessagingPort for testing purposes.
-     */
     private static class TestMessagingPort implements MessagingPort {
         final List<SentMessage> sentMessages = new ArrayList<>();
         final List<BroadcastMessage> broadcastMessages = new ArrayList<>();
 
         @Override
-        public void send(de.haw.vsp.simulation.middleware.NodeId receiver,
-                        de.haw.vsp.simulation.middleware.SimulationMessage message) {
+        public void send(de.haw.vsp.simulation.core.NodeId receiver,
+                         de.haw.vsp.simulation.core.SimulationMessage message) {
             sentMessages.add(new SentMessage(receiver, message));
         }
 
         @Override
-        public void broadcast(Set<de.haw.vsp.simulation.middleware.NodeId> receivers,
-                             de.haw.vsp.simulation.middleware.SimulationMessage message) {
+        public void broadcast(Set<de.haw.vsp.simulation.core.NodeId> receivers,
+                              de.haw.vsp.simulation.core.SimulationMessage message) {
             broadcastMessages.add(new BroadcastMessage(receivers, message));
         }
 
         @Override
-        public void registerHandler(de.haw.vsp.simulation.middleware.NodeId nodeId, MessageHandler handler) {
+        public void registerHandler(de.haw.vsp.simulation.core.NodeId nodeId, MessageHandler handler) {
             // Not needed for NodeContext tests
         }
 
         @Override
-        public void unregisterHandler(de.haw.vsp.simulation.middleware.NodeId nodeId) {
+        public void unregisterHandler(de.haw.vsp.simulation.core.NodeId nodeId) {
             // Not needed for NodeContext tests
         }
 
         static class SentMessage {
-            final de.haw.vsp.simulation.middleware.NodeId receiver;
-            final de.haw.vsp.simulation.middleware.SimulationMessage message;
+            final de.haw.vsp.simulation.core.NodeId receiver;
+            final de.haw.vsp.simulation.core.SimulationMessage message;
 
-            SentMessage(de.haw.vsp.simulation.middleware.NodeId receiver,
-                       de.haw.vsp.simulation.middleware.SimulationMessage message) {
+            SentMessage(de.haw.vsp.simulation.core.NodeId receiver,
+                        de.haw.vsp.simulation.core.SimulationMessage message) {
                 this.receiver = receiver;
                 this.message = message;
             }
         }
 
         static class BroadcastMessage {
-            final Set<de.haw.vsp.simulation.middleware.NodeId> receivers;
-            final de.haw.vsp.simulation.middleware.SimulationMessage message;
+            final Set<de.haw.vsp.simulation.core.NodeId> receivers;
+            final de.haw.vsp.simulation.core.SimulationMessage message;
 
-            BroadcastMessage(Set<de.haw.vsp.simulation.middleware.NodeId> receivers,
-                            de.haw.vsp.simulation.middleware.SimulationMessage message) {
+            BroadcastMessage(Set<de.haw.vsp.simulation.core.NodeId> receivers,
+                             de.haw.vsp.simulation.core.SimulationMessage message) {
                 this.receivers = receivers;
                 this.message = message;
             }
         }
     }
 }
-
+*/

@@ -1,32 +1,34 @@
-
 package de.haw.vsp.simulation.middleware;
 
-        import de.haw.vsp.simulation.middleware.codec.JacksonSimulationMessageCodec;
-        import de.haw.vsp.simulation.middleware.inmemory.InMemoryMessagingPort;
-        import de.haw.vsp.simulation.middleware.udp.UdpMessagingPort;
+import de.haw.vsp.simulation.core.NodeId;
+import de.haw.vsp.simulation.core.SimulationEventPublisher;
+import de.haw.vsp.simulation.middleware.adapter.InMemoryAdapter;
+import de.haw.vsp.simulation.middleware.adapter.UdpAdapter;
+import de.haw.vsp.simulation.middleware.codec.JacksonSimulationMessageCodec;
 
 /**
- * Convenience factory methods for creating {@link MessagingPort} instances.
- *
- * <p>Engine/core should prefer depending on {@link MessagingPort} and choose an implementation
- * at wiring time.</p>
+ * Factory for constructing middleware ports with appropriate transport adapters.
  */
 public final class MessagingPorts {
 
     private MessagingPorts() {}
 
-    /**
-     * Best for tests / single-process runs.
-     */
-    public static MessagingPort inMemory() {
-        return new InMemoryMessagingPort();
+    public static MessagingPort inMemory(NodeId localNode, SimulationEventPublisher publisher) {
+        return new MessagingPortImpl(new InMemoryAdapter(localNode), publisher);
     }
 
-    /**
-     * UDP transport endpoint for a single local node.
-     */
-    public static UdpMessagingPort udp(NodeId localNodeId, TransportConfig config) {
+    public static MessagingPort inMemory(NodeId localNode) {
+        return inMemory(localNode, null);
+    }
+
+    public static MessagingPort udp(NodeId localNode, TransportConfig config, SimulationEventPublisher publisher) {
         var codec = new JacksonSimulationMessageCodec();
-        return new UdpMessagingPort(localNodeId, config, codec, codec);
+        var adapter = new UdpAdapter(localNode, config, codec, codec);
+        return new MessagingPortImpl(adapter, publisher);
+    }
+
+    public static MessagingPort udp(NodeId localNode, TransportConfig config) {
+        return udp(localNode, config, null);
     }
 }
+

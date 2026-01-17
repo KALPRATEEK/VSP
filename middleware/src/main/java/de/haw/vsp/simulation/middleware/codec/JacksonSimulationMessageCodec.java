@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
-import de.haw.vsp.simulation.middleware.SimulationMessage;
+import de.haw.vsp.simulation.core.SimulationMessage;
 
 import java.util.Objects;
 
@@ -53,7 +53,7 @@ public final class JacksonSimulationMessageCodec
         // JsonMapper is the recommended builder for Jackson 2.10+.
         return JsonMapper.builder()
                 // In distributed settings, it's helpful if older/newer nodes don't crash on extra fields.
-                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true)
                 .build();
     }
 }
