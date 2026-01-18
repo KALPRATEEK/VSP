@@ -2,33 +2,45 @@ package de.haw.vsp.simulation.middleware;
 
 import de.haw.vsp.simulation.core.NodeId;
 import de.haw.vsp.simulation.core.SimulationEventPublisher;
-import de.haw.vsp.simulation.middleware.adapter.InMemoryAdapter;
 import de.haw.vsp.simulation.middleware.adapter.UdpAdapter;
+import de.haw.vsp.simulation.middleware.adapter.VirtualAdapter;
 import de.haw.vsp.simulation.middleware.codec.JacksonSimulationMessageCodec;
+import de.haw.vsp.simulation.middleware.virtual.VirtualFaultConfig;
 
-/**
- * Factory for constructing middleware ports with appropriate transport adapters.
- */
 public final class MessagingPorts {
-
     private MessagingPorts() {}
 
-    public static MessagingPort inMemory(NodeId localNode, SimulationEventPublisher publisher) {
-        return new MessagingPortImpl(new InMemoryAdapter(localNode), publisher);
+    /** MW_MODE=virtual (single shared router port; many node senders allowed). */
+    public static MessagingPort virtual() {
+        return virtual(null, QueueConfig.defaultConfig(), QueueConfig.defaultConfig(), VirtualFaultConfig.DISABLED);
     }
 
-    public static MessagingPort inMemory(NodeId localNode) {
-        return inMemory(localNode, null);
+    public static MessagingPort virtual(SimulationEventPublisher publisher) {
+        return virtual(publisher, QueueConfig.defaultConfig(), QueueConfig.defaultConfig(), VirtualFaultConfig.DISABLED);
     }
 
-    public static MessagingPort udp(NodeId localNode, TransportConfig config, SimulationEventPublisher publisher) {
+    public static MessagingPort virtual(
+            SimulationEventPublisher publisher,
+            QueueConfig outbound,
+            QueueConfig inboundPerReceiver,
+            VirtualFaultConfig faults
+    ) {
+        var codec = new JacksonSimulationMessageCodec();
+        var adapter = new VirtualAdapter(codec, codec, outbound, inboundPerReceiver,
+                Math.max(2, Runtime.getRuntime().availableProcessors()), faults);
+
+        // IMPORTANT: enforceLocalSender=false in virtual mode (shared port)
+        return new MessagingPortImpl(adapter, publisher, false);
+    }
+
+    /** MW_MODE=udp-docker (one node per container; sender must be local node). */
+    public static MessagingPort udpDocker(NodeId localNode, TransportConfig config, SimulationEventPublisher publisher) {
         var codec = new JacksonSimulationMessageCodec();
         var adapter = new UdpAdapter(localNode, config, codec, codec);
-        return new MessagingPortImpl(adapter, publisher);
+        return new MessagingPortImpl(adapter, publisher, true);
     }
 
-    public static MessagingPort udp(NodeId localNode, TransportConfig config) {
-        return udp(localNode, config, null);
+    public static MessagingPort udpDocker(NodeId localNode, TransportConfig config) {
+        return udpDocker(localNode, config, null);
     }
 }
-
