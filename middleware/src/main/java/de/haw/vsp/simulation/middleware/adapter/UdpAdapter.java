@@ -2,6 +2,7 @@ package de.haw.vsp.simulation.middleware.adapter;
 
 import de.haw.vsp.simulation.core.NodeId;
 import de.haw.vsp.simulation.core.SimulationMessage;
+import de.haw.vsp.simulation.middleware.QueueConfig;
 import de.haw.vsp.simulation.middleware.TransportAddress;
 import de.haw.vsp.simulation.middleware.TransportConfig;
 import de.haw.vsp.simulation.middleware.codec.MessageCodecException;
@@ -10,140 +11,239 @@ import de.haw.vsp.simulation.middleware.codec.SimulationMessageSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import de.haw.vsp.simulation.middleware.QueueOps;
+
 import java.io.IOException;
 import java.net.*;
 import java.util.Objects;
-import java.util.concurrent.*;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * UDP-based {@link TransportAdapter}.
+ *
+ * Realistic DS behavior:
+ * - outbound queue: producer = send(), consumer = sender thread
+ * - inbound queue: producer = receiver loop, consumer = delivery thread
+ * - bounded queues with explicit overflow policies (no silent drops due to thread pool rejection)
+ *
+ * Docker behavior:
+ * - binds to 0.0.0.0:port (NOT to the configured hostname) so it works in containers
  */
 public final class UdpAdapter implements TransportAdapter {
 
     private static final Logger LOG = LoggerFactory.getLogger(UdpAdapter.class);
-    private static final int MAX_DATAGRAM_BYTES = 64 * 1024;
+    //private static final int MAX_DATAGRAM_BYTES = 64 * 1024;
+    private static final int MAX_DATAGRAM_BYTES = 65_507;
 
     private final NodeId localNode;
     private final TransportConfig config;
     private final SimulationMessageSerializer serializer;
     private final SimulationMessageDeserializer deserializer;
 
+    private final QueueConfig inboundConfig;
+    private final QueueConfig outboundConfig;
+
     private volatile ReceiveCallback callback;
 
     private final DatagramSocket socket;
-    private final ExecutorService receiver;
-    private final ExecutorService sender;
+
+    private final LinkedBlockingDeque<SimulationMessage> inboundQueue;
+    private final LinkedBlockingDeque<OutboundDatagram> outboundQueue;
 
     private final AtomicBoolean running = new AtomicBoolean(true);
 
-    public UdpAdapter(NodeId localNode,
-                      TransportConfig config,
-                      SimulationMessageSerializer serializer,
-                      SimulationMessageDeserializer deserializer) {
-        this.localNode = Objects.requireNonNull(localNode);
-        this.config = Objects.requireNonNull(config);
-        this.serializer = Objects.requireNonNull(serializer);
-        this.deserializer = Objects.requireNonNull(deserializer);
+    private final Thread recvThread;
+    private final Thread deliverThread;
+    private final Thread sendThread;
 
-        // now localNode is definitely initialized, safe to use in thread names
-        this.receiver = Executors.newSingleThreadExecutor(
-                r -> new Thread(r, "udp-adapter-recv-" + this.localNode)
-        );
-        this.sender = new ThreadPoolExecutor(
-                1, 1, 0L, TimeUnit.MILLISECONDS,
-                new SynchronousQueue<>(),
-                r -> new Thread(r, "udp-adapter-send-" + this.localNode),
-                new ThreadPoolExecutor.DiscardPolicy()
-        );
+    private volatile ErrorCallback errorCallback;
 
-        TransportAddress addr = config.resolve(this.localNode);
-        if (addr == null) {
+    public UdpAdapter(
+            NodeId localNode,
+            TransportConfig config,
+            SimulationMessageSerializer serializer,
+            SimulationMessageDeserializer deserializer
+    ) {
+        this(localNode, config, serializer, deserializer, QueueConfig.defaultConfig(), QueueConfig.defaultConfig());
+    }
+
+    public UdpAdapter(
+            NodeId localNode,
+            TransportConfig config,
+            SimulationMessageSerializer serializer,
+            SimulationMessageDeserializer deserializer,
+            QueueConfig inboundConfig,
+            QueueConfig outboundConfig
+    ) {
+        this.localNode = Objects.requireNonNull(localNode, "localNode");
+        this.config = Objects.requireNonNull(config, "config");
+        this.serializer = Objects.requireNonNull(serializer, "serializer");
+        this.deserializer = Objects.requireNonNull(deserializer, "deserializer");
+        this.inboundConfig = Objects.requireNonNull(inboundConfig, "inboundConfig");
+        this.outboundConfig = Objects.requireNonNull(outboundConfig, "outboundConfig");
+
+        this.inboundQueue = new LinkedBlockingDeque<>(this.inboundConfig.capacity());
+        this.outboundQueue = new LinkedBlockingDeque<>(this.outboundConfig.capacity());
+
+        TransportAddress localAddr = config.resolve(this.localNode);
+        if (localAddr == null) {
             throw new IllegalArgumentException("No transport address for " + this.localNode);
         }
 
+        // Docker correctness: bind to all interfaces on the configured port
         try {
-            this.socket = new DatagramSocket(new InetSocketAddress(addr.host(), addr.port()));
+            DatagramSocket s = new DatagramSocket(null);
+            s.setReuseAddress(true);
+            s.bind(new InetSocketAddress(localAddr.port()));
+            this.socket = s;
         } catch (SocketException e) {
-            throw new IllegalStateException("Failed to bind UDP socket for " + this.localNode, e);
+            throw new IllegalStateException(
+                    "Failed to bind UDP socket for " + this.localNode + " on port " + localAddr.port(), e
+            );
         }
 
-        startReceiverLoop();
+        this.recvThread = new Thread(this::receiveLoop, "udp-adapter-recv-" + this.localNode);
+        this.recvThread.setDaemon(true);
+
+        this.deliverThread = new Thread(this::deliverLoop, "udp-adapter-deliver-" + this.localNode);
+        this.deliverThread.setDaemon(true);
+
+        this.sendThread = new Thread(this::sendLoop, "udp-adapter-send-" + this.localNode);
+        this.sendThread.setDaemon(true);
+
+        this.recvThread.start();
+        this.deliverThread.start();
+        this.sendThread.start();
     }
 
     @Override
-    public void send(SimulationMessage message) {
-        NodeId receiver = message.receiver();
-        TransportAddress addr = config.resolve(receiver);
+    public boolean send(SimulationMessage message) {
+        TransportAddress addr = config.resolve(message.receiver());
         if (addr == null) {
-            LOG.debug("Drop message to {} (unknown address)", receiver);
-            return;
+            return false; // unknown receiver
         }
 
         final byte[] bytes;
         try {
             bytes = serializer.serialize(message);
         } catch (MessageCodecException e) {
-            LOG.debug("Serialization failed: {}", e.getMessage());
-            return;
+            return false; // serialization failed
         }
 
         if (bytes.length > MAX_DATAGRAM_BYTES) {
-            LOG.debug("Drop oversized datagram ({} bytes)", bytes.length);
-            return;
+            return false; // oversize
         }
 
-        try {
-            sender.execute(() -> doSend(addr, bytes));
-        } catch (RejectedExecutionException e) {
-            LOG.debug("Drop message (sender busy)");
+        return QueueOps.enqueue(outboundQueue, new OutboundDatagram(message.receiver(), addr, bytes), outboundConfig); // false if outbound queue full
+    }
+
+    private void sendLoop() {
+        while (running.get()) {
+            try {
+                OutboundDatagram job = outboundQueue.takeFirst();
+                doSend(job.receiver, job.addr, job.bytes);
+            } catch (InterruptedException ie) {
+                if (!running.get()) break;
+                Thread.currentThread().interrupt();
+            } catch (RuntimeException e) {
+                LOG.debug("UDP send loop error: {}", e.getMessage());
+                // receiver unknown here
+                reportError(localNode, null, "udp send loop error: " + e.getMessage());
+            }
         }
     }
 
-    private void doSend(TransportAddress addr, byte[] bytes) {
+    private void doSend(NodeId receiver, TransportAddress addr, byte[] bytes) {
         try {
             DatagramPacket packet = new DatagramPacket(
                     bytes, bytes.length,
-                    InetAddress.getByName(addr.host()), addr.port());
+                    InetAddress.getByName(addr.host()), addr.port()
+            );
             socket.send(packet);
         } catch (IOException e) {
-            LOG.debug("UDP send failed: {}", e.getMessage());
+            reportError(localNode, receiver, "udp send failed: " + e.getMessage());
         }
     }
 
-    private void startReceiverLoop() {
-        receiver.submit(() -> {
-            byte[] buf = new byte[MAX_DATAGRAM_BYTES];
-            DatagramPacket packet = new DatagramPacket(buf, buf.length);
+    private void receiveLoop() {
+        byte[] buf = new byte[MAX_DATAGRAM_BYTES];
+        DatagramPacket packet = new DatagramPacket(buf, buf.length);
 
-            while (running.get()) {
+        while (running.get()) {
+            try {
+                socket.receive(packet);
+
+                byte[] data = new byte[packet.getLength()];
+                System.arraycopy(packet.getData(), packet.getOffset(), data, 0, packet.getLength());
+
+                SimulationMessage msg;
                 try {
-                    socket.receive(packet);
-                    byte[] data = new byte[packet.getLength()];
-                    System.arraycopy(packet.getData(), packet.getOffset(), data, 0, packet.getLength());
-
-                    SimulationMessage msg;
-                    try {
-                        msg = deserializer.deserialize(data);
-                    } catch (MessageCodecException e) {
-                        LOG.debug("Decode error: {}", e.getMessage());
-                        continue;
-                    }
-
-                    if (callback != null) callback.onMessage(msg);
-
-                } catch (IOException e) {
-                    if (running.get()) LOG.debug("UDP receive error: {}", e.getMessage());
-                } finally {
-                    packet.setLength(buf.length);
+                    msg = deserializer.deserialize(data);
+                } catch (MessageCodecException e) {
+                    reportError(localNode, null, "decode error from " + packet.getSocketAddress() + ": " + e.getMessage());
+                    continue;
                 }
+                if (!msg.receiver().equals(localNode)) {
+                    reportError(localNode, msg.sender(), "misaddressed message");
+                    continue;
+                }
+
+                boolean accepted = QueueOps.enqueue(inboundQueue, msg, inboundConfig);
+                if (!accepted) {
+                    reportError(localNode, msg.sender(), "inbound queue full (dropped)");
+                }
+
+            } catch (SocketException se) {
+                // expected on close()
+                if (running.get()) {
+                    reportError(localNode, null, "udp socket error: " + se.getMessage());
+                }
+                break;
+            } catch (IOException e) {
+                if (running.get()) {
+                    reportError(localNode, null, "udp receive error: " + e.getMessage());
+                }
+            } finally {
+                packet.setLength(buf.length);
             }
-        });
+        }
+    }
+
+    private void deliverLoop() {
+        while (running.get()) {
+            try {
+                SimulationMessage msg = inboundQueue.takeFirst();
+                ReceiveCallback cb = this.callback;
+                if (cb != null) {
+                    cb.onMessage(msg);
+                } else {
+                    // No handler wired yet -> transient drop
+                    reportError(localNode, msg.sender(), "no receive callback yet (dropped)");
+                }
+            } catch (InterruptedException ie) {
+                if (!running.get()) break;
+                Thread.currentThread().interrupt();
+            } catch (RuntimeException e) {
+                LOG.debug("UDP deliver loop error: {}", e.getMessage());
+                reportError(localNode, null, "udp deliver loop error: " + e.getMessage());
+            }
+        }
     }
 
     @Override
     public void onReceive(ReceiveCallback callback) {
         this.callback = callback;
+    }
+
+    @Override
+    public void onError(ErrorCallback cb) {
+        this.errorCallback = cb;
+    }
+
+    private void reportError(NodeId node, NodeId peer, String msg) {
+        ErrorCallback cb = this.errorCallback;
+        if (cb != null) cb.onError(node, peer, msg);
     }
 
     @Override
@@ -154,8 +254,20 @@ public final class UdpAdapter implements TransportAdapter {
     @Override
     public void close() {
         running.set(false);
-        socket.close();
-        sender.shutdownNow();
-        receiver.shutdownNow();
+
+        // Unblock receiver loop
+        try {
+            socket.close();
+        } catch (Exception ignored) {}
+
+        // Unblock loops
+        recvThread.interrupt();
+        deliverThread.interrupt();
+        sendThread.interrupt();
+
+        inboundQueue.clear();
+        outboundQueue.clear();
     }
+
+    private record OutboundDatagram(NodeId receiver, TransportAddress addr, byte[] bytes) {}
 }

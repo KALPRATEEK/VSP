@@ -53,7 +53,7 @@ public final class JacksonSimulationMessageCodec
         // JsonMapper is the recommended builder for Jackson 2.10+.
         return JsonMapper.builder()
                 // In distributed settings, it's helpful if older/newer nodes don't crash on extra fields.
-                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true)
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
                 .build();
     }
 }

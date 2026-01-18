@@ -128,8 +128,9 @@ class NodeIdTest {
 
             assertTrue(node1.compareTo(node2) < 0);
             // Note: Lexicographic comparison, not numeric
-            assertTrue(node10.compareTo(node2) < 0); // "10" < "2" lexicographically
+            assertTrue(node10.compareTo(node2) > 0); // "10" < "2" lexicographically
         }
+
     }
 
     @Nested

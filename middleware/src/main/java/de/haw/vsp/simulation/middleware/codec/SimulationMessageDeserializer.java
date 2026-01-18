@@ -9,4 +9,5 @@ import de.haw.vsp.simulation.core.SimulationMessage;
 public interface SimulationMessageDeserializer {
 
     SimulationMessage deserialize(byte[] bytes) throws MessageCodecException;
+
 }

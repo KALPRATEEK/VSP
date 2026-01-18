@@ -66,43 +66,10 @@ class SimulationNodeMessageBufferingTest {
         
         SimulationNode node1 = new SimulationNode(nodeId1, neighbors1, algorithm1, context1);
         SimulationNode node2 = new SimulationNode(nodeId2, neighbors2, algorithm2, context2);
-        
-        // Register handlers
-        messagingPort.registerHandler(
-                new de.haw.vsp.simulation.middleware.NodeId(nodeId1.value()),
-                message -> {
-                    de.haw.vsp.simulation.core.NodeId senderNodeId =
-                            new de.haw.vsp.simulation.core.NodeId(message.sender().value());
-                    de.haw.vsp.simulation.core.NodeId receiverNodeId =
-                            new de.haw.vsp.simulation.core.NodeId(message.receiver().value());
-                    de.haw.vsp.simulation.core.SimulationMessage coreMessage =
-                            new de.haw.vsp.simulation.core.SimulationMessage(
-                                    senderNodeId,
-                                    receiverNodeId,
-                                    message.type(),
-                                    message.payload() != null ? message.payload().toString() : null
-                            );
-                    node1.onMessage(context1, coreMessage);
-                }
-        );
-        
-        messagingPort.registerHandler(
-                new de.haw.vsp.simulation.middleware.NodeId(nodeId2.value()),
-                message -> {
-                    de.haw.vsp.simulation.core.NodeId senderNodeId =
-                            new de.haw.vsp.simulation.core.NodeId(message.sender().value());
-                    de.haw.vsp.simulation.core.NodeId receiverNodeId =
-                            new de.haw.vsp.simulation.core.NodeId(message.receiver().value());
-                    de.haw.vsp.simulation.core.SimulationMessage coreMessage =
-                            new de.haw.vsp.simulation.core.SimulationMessage(
-                                    senderNodeId,
-                                    receiverNodeId,
-                                    message.type(),
-                                    message.payload() != null ? message.payload().toString() : null
-                            );
-                    node2.onMessage(context2, coreMessage);
-                }
-        );
+
+// Register handlers (middleware uses core SimulationMessage directly)
+        messagingPort.registerHandler(nodeId1, msg -> node1.onMessage(context1, msg));
+        messagingPort.registerHandler(nodeId2, msg -> node2.onMessage(context2, msg));
         
         // Mark nodes as started (allows message reception)
         node1.markAsStarted();
