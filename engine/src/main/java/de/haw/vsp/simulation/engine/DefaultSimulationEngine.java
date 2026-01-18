@@ -8,6 +8,7 @@ import de.haw.vsp.simulation.core.SimulationEvent;
 import de.haw.vsp.simulation.core.SimulationEventPublisher;
 import de.haw.vsp.simulation.core.SimulationParameters;
 import de.haw.vsp.simulation.middleware.MessagingPort;
+import de.haw.vsp.simulation.middleware.EventPublisherAware;
 import de.haw.vsp.simulation.middleware.MessagingPorts;
 
 import java.util.*;
@@ -54,7 +55,7 @@ public class DefaultSimulationEngine implements SimulationEngine {
      * Creates a new simulation engine with an in-memory messaging port.
      */
     public DefaultSimulationEngine() {
-        this(MessagingPorts.inMemory();
+        this(MessagingPorts.virtual());
     }
 
     /**
@@ -317,9 +318,10 @@ public class DefaultSimulationEngine implements SimulationEngine {
 
         // If we are using the shared in-memory middleware, forward the publisher
         // so message events/errors can be observed via the UI.
-        if (messagingPort instanceof InMemoryMessagingPort inMem) {
-            inMem.setEventPublisher(eventPublisher);
+        if (messagingPort instanceof EventPublisherAware aware) {
+            aware.setEventPublisher(eventPublisher);
         }
+
     }
 
     /**

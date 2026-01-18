@@ -31,10 +31,12 @@ public record QueueConfig(
 
     /**
      * Default configuration intended for deterministic/robust simulations:
-     * bounded queue + backpressure (BLOCK) with a finite timeout.
+     * bounded queue + non blocking
      */
     public static QueueConfig defaultConfig() {
-        return new QueueConfig(1024, QueueOverflowPolicy.BLOCK, 1000);
+        // Contract default recommendation: non-blocking overflow handling
+        return new QueueConfig(1024, QueueOverflowPolicy.DROP_NEWEST, 0);
+        // return new QueueConfig(1024, QueueOverflowPolicy.BLOCK, 1000);
     }
 
     /**

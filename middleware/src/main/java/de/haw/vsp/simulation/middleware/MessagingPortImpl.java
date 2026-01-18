@@ -16,25 +16,39 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 /**
- * Implementation of {@link MessagingPort} that delegates actual message
- * transport to a pluggable {@link TransportAdapter}.
+ * MessagingPort implementation delegating transport to a TransportAdapter.
  *
- * This class adds validation, event publishing and handler management.
+ * - udp-docker: enforceLocalSender = true (sender must equal adapter.localNode)
+ * - virtual:    enforceLocalSender = false (single shared port for many nodes)
  */
-public final class MessagingPortImpl implements MessagingPort, Closeable {
+public final class MessagingPortImpl implements MessagingPort, Closeable, EventPublisherAware {
 
     private static final Logger LOG = LoggerFactory.getLogger(MessagingPortImpl.class);
 
     private final TransportAdapter adapter;
-    private final SimulationEventPublisher eventPublisher; // may be null
+    private final boolean enforceLocalSender;
+
+    private volatile SimulationEventPublisher eventPublisher; // may be null
     private final ConcurrentMap<NodeId, MessageHandler> handlers = new ConcurrentHashMap<>();
 
     public MessagingPortImpl(TransportAdapter adapter, SimulationEventPublisher eventPublisher) {
+        this(adapter, eventPublisher, true);
+    }
+
+    public MessagingPortImpl(TransportAdapter adapter, SimulationEventPublisher eventPublisher, boolean enforceLocalSender) {
         this.adapter = Objects.requireNonNull(adapter, "adapter");
         this.eventPublisher = eventPublisher;
+        this.enforceLocalSender = enforceLocalSender;
 
-        // wire incoming messages
         adapter.onReceive(this::handleIncoming);
+
+        // forward transport-level errors to SimulationEvents.ERROR
+        adapter.onError((nodeId, peer, msg) -> publish(EventType.ERROR, nodeId, peer, msg));
+    }
+
+    @Override
+    public void setEventPublisher(SimulationEventPublisher publisher) {
+        this.eventPublisher = publisher;
     }
 
     @Override
@@ -43,27 +57,35 @@ public final class MessagingPortImpl implements MessagingPort, Closeable {
         Objects.requireNonNull(message, "message");
 
         if (!receiver.equals(message.receiver())) {
-            publishError(message.sender(), receiver, "receiver mismatch");
-            return;
-        }
-        if (!adapter.localNode().equals(message.sender())) {
-            publishError(adapter.localNode(), receiver, "sender mismatch");
+            publish(EventType.ERROR, message.sender(), receiver, "receiver mismatch");
             return;
         }
 
-        publish(EventType.MESSAGE_SENT, message.sender(), message.receiver(), summary(message));
-        adapter.send(message);
+        if (enforceLocalSender && !adapter.localNode().equals(message.sender())) {
+            publish(EventType.ERROR, adapter.localNode(), receiver, "sender mismatch");
+            return;
+        }
+
+        boolean accepted = adapter.send(message);
+        if (accepted){
+            publish(EventType.MESSAGE_SENT, message.sender(), message.receiver(), summary(message));
+        }
     }
 
     @Override
     public void broadcast(Set<NodeId> receivers, SimulationMessage baseMessage) {
         Objects.requireNonNull(receivers, "receivers");
+        Objects.requireNonNull(baseMessage, "baseMessage");
+
         for (NodeId r : receivers) {
             if (r == null) continue;
+
             SimulationMessage msg = baseMessage;
             if (!Objects.equals(r, baseMessage.receiver())) {
-                msg = new SimulationMessage(baseMessage.sender(), r,
-                        baseMessage.messageType(), baseMessage.payload(), baseMessage.seq());
+                msg = new SimulationMessage(
+                        baseMessage.sender(), r,
+                        baseMessage.messageType(), baseMessage.payload(), baseMessage.seq()
+                );
             }
             send(r, msg);
         }
@@ -84,19 +106,18 @@ public final class MessagingPortImpl implements MessagingPort, Closeable {
 
     @Override
     public void close() {
-        try {
-            adapter.close();
-        } catch (Exception ignored) {}
+        try { adapter.close(); } catch (Exception ignored) {}
         handlers.clear();
     }
 
     private void handleIncoming(SimulationMessage msg) {
         if (msg == null) return;
+
         NodeId receiver = msg.receiver();
         MessageHandler handler = handlers.get(receiver);
 
         if (handler == null) {
-            publishError(receiver, msg.sender(), "no handler registered");
+            publish(EventType.ERROR, receiver, msg.sender(), "no handler registered");
             return;
         }
 
@@ -104,23 +125,22 @@ public final class MessagingPortImpl implements MessagingPort, Closeable {
         try {
             handler.onMessage(msg);
         } catch (RuntimeException e) {
-            publishError(receiver, msg.sender(), "handler error: " + e.getMessage());
+            publish(EventType.ERROR, receiver, msg.sender(), "handler error: " + e.getMessage());
             LOG.debug("Handler error at {} for message {}", receiver, msg, e);
         }
     }
 
     private void publish(EventType type, NodeId nodeId, NodeId peer, String summary) {
-        if (eventPublisher == null) return;
-        eventPublisher.publish(new SimulationEvent(
-                System.currentTimeMillis(), type,
+        SimulationEventPublisher pub = this.eventPublisher;
+        if (pub == null || nodeId == null) return;
+
+        pub.publish(new SimulationEvent(
+                System.currentTimeMillis(),
+                type,
                 nodeId.toString(),
                 peer == null ? null : peer.toString(),
                 summary
         ));
-    }
-
-    private void publishError(NodeId nodeId, NodeId peer, String msg) {
-        publish(EventType.ERROR, nodeId, peer, msg);
     }
 
     private static String summary(SimulationMessage m) {
