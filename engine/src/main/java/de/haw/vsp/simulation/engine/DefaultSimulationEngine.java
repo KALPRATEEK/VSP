@@ -8,7 +8,7 @@ import de.haw.vsp.simulation.core.SimulationEvent;
 import de.haw.vsp.simulation.core.SimulationEventPublisher;
 import de.haw.vsp.simulation.core.SimulationParameters;
 import de.haw.vsp.simulation.middleware.MessagingPort;
-import de.haw.vsp.simulation.middleware.inmemory.InMemoryMessagingPort;
+import de.haw.vsp.simulation.middleware.MessagingPorts;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -54,7 +54,7 @@ public class DefaultSimulationEngine implements SimulationEngine {
      * Creates a new simulation engine with an in-memory messaging port.
      */
     public DefaultSimulationEngine() {
-        this(new InMemoryMessagingPort());
+        this(MessagingPorts.inMemory();
     }
 
     /**
@@ -553,4 +553,5 @@ public class DefaultSimulationEngine implements SimulationEngine {
         STOPPED
     }
 }
+
 
