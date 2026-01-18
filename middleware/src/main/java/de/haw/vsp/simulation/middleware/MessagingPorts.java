@@ -12,11 +12,13 @@ public final class MessagingPorts {
 
     /** MW_MODE=virtual (single shared router port; many node senders allowed). */
     public static MessagingPort virtual() {
-        return virtual(null, QueueConfig.defaultConfig(), QueueConfig.defaultConfig(), VirtualFaultConfig.DISABLED);
+        var q = EnvQueueConfigs.fromSystemEnvironment();
+        return virtual(null, q.outbound(), q.inbound(), VirtualFaultConfig.DISABLED);
     }
 
     public static MessagingPort virtual(SimulationEventPublisher publisher) {
-        return virtual(publisher, QueueConfig.defaultConfig(), QueueConfig.defaultConfig(), VirtualFaultConfig.DISABLED);
+        var q = EnvQueueConfigs.fromSystemEnvironment();
+        return virtual(publisher, q.outbound(), q.inbound(), VirtualFaultConfig.DISABLED);
     }
 
     public static MessagingPort virtual(
@@ -26,8 +28,12 @@ public final class MessagingPorts {
             VirtualFaultConfig faults
     ) {
         var codec = new JacksonSimulationMessageCodec();
-        var adapter = new VirtualAdapter(codec, codec, outbound, inboundPerReceiver,
-                Math.max(2, Runtime.getRuntime().availableProcessors()), faults);
+        var adapter = new VirtualAdapter(
+                codec, codec,
+                outbound, inboundPerReceiver,
+                Math.max(2, Runtime.getRuntime().availableProcessors()),
+                faults
+        );
 
         // IMPORTANT: enforceLocalSender=false in virtual mode (shared port)
         return new MessagingPortImpl(adapter, publisher, false);
@@ -36,7 +42,10 @@ public final class MessagingPorts {
     /** MW_MODE=udp-docker (one node per container; sender must be local node). */
     public static MessagingPort udpDocker(NodeId localNode, TransportConfig config, SimulationEventPublisher publisher) {
         var codec = new JacksonSimulationMessageCodec();
-        var adapter = new UdpAdapter(localNode, config, codec, codec);
+        var q = EnvQueueConfigs.fromSystemEnvironment();
+
+        // NOTE: UdpAdapter ctor order here assumes (inboundConfig, outboundConfig)
+        var adapter = new UdpAdapter(localNode, config, codec, codec, q.inbound(), q.outbound());
         return new MessagingPortImpl(adapter, publisher, true);
     }
 
