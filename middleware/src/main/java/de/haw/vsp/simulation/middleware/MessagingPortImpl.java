@@ -56,21 +56,27 @@ public final class MessagingPortImpl implements MessagingPort, Closeable, EventP
         Objects.requireNonNull(receiver, "receiver");
         Objects.requireNonNull(message, "message");
 
+        // optional: keep your existing validation if you already have it
         if (!receiver.equals(message.receiver())) {
             publish(EventType.ERROR, message.sender(), receiver, "receiver mismatch");
             return;
         }
 
+        // optional: if udp-docker enforces sender == local node
         if (enforceLocalSender && !adapter.localNode().equals(message.sender())) {
             publish(EventType.ERROR, adapter.localNode(), receiver, "sender mismatch");
             return;
         }
 
         boolean accepted = adapter.send(message);
-        if (accepted){
+
+        if (accepted) {
             publish(EventType.MESSAGE_SENT, message.sender(), message.receiver(), summary(message));
+        } else {
+            publish(EventType.ERROR, message.sender(), message.receiver(), "dropped by transport (send not accepted)");
         }
     }
+
 
     @Override
     public void broadcast(Set<NodeId> receivers, SimulationMessage baseMessage) {

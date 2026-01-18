@@ -104,14 +104,11 @@ public final class VirtualAdapter implements TransportAdapter {
 
     @Override
     public boolean send(SimulationMessage message) {
-        if (message == null || !running.get()) return false;
+        if (!running.get()) return false;
 
-        boolean accepted = QueueOps.enqueue(outboundQueue, message, outboundConfig);
-        if (!accepted) {
-            reportError(message.sender(), message.receiver(), "virtual outbound queue full (dropped)");
-        }
-        return accepted;
+        return QueueOps.enqueue(outboundQueue, message, outboundConfig);
     }
+
 
     @Override
     public void onReceive(ReceiveCallback callback) {

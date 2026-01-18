@@ -1,12 +1,12 @@
-# Middleware Contract (Single Source of Truth) — v1.0
+# Middleware Contract (Single Source of Truth) — v2.0
 
 This document defines the **authoritative contract** for the middleware. All other components (engine, node algorithms, UI/metrics/logging) must align to this contract.
 
 Supported execution modes:
-- **`virtual`** — local, in-memory “virtual network” for fast dev/tests (Option A)
+- **`virtual`** — local, in-memory “virtual network” for fast dev/tests
 - **`udp-docker`** — real UDP networking across Docker containers (one node per container)
 
-Everything below applies to **both** modes unless explicitly noted.
+Everything below applies to **both** modes unless explicitly noted.ted.
 
 ---
 
@@ -34,10 +34,12 @@ Operations:
 - `registerHandler(NodeId nodeId, MessageHandler handler)`
 - `unregisterHandler(NodeId nodeId)`
 
-Semantics:
-- `send` / `broadcast` are **asynchronous**: they enqueue work and return without waiting for delivery.
+**Semantics (authoritative):**
+- `send` / `broadcast` are **asynchronous**: they enqueue work and return immediately.
+- **`send(...)` returns `true` iff the message was accepted by the middleware** (e.g., successfully enqueued for transmission).
+- If `send(...)` returns `false`, the message was **dropped immediately** (e.g., queue full, unknown receiver, serialization failure), and an **ERROR** event MUST be emitted (if a publisher is attached).
 - `registerHandler(nodeId, handler)` defines where inbound messages for `nodeId` are delivered.
-- If a receiver has **no registered handler**, the message is **dropped** and an **ERROR** event SHOULD be emitted (if publisher attached).
+- If a receiver has **no registered handler**, the message is **dropped** and an **ERROR** event SHOULD be emitted (if a publisher is attached).
 
 ### MessageHandler
 - `onMessage(SimulationMessage msg)` is invoked **asynchronously** by middleware.
@@ -100,14 +102,21 @@ Always true:
 ## 6. Observability (Simulation Events)
 
 If an event publisher is attached, middleware emits:
-- **MESSAGE_SENT** — when a message is accepted by middleware (enqueued / accepted for transmission).
-- **MESSAGE_RECEIVED** — when a message is delivered to the registered handler.
-- **ERROR** — on:
-    - invalid message fields
-    - missing handler
-    - queue overflow drop / block timeout
-    - decode errors
-    - transport failures
+
+- **MESSAGE_SENT**  
+  Emitted **only when a message has been accepted by the middleware** (i.e., `send(...)` returned `true`).
+
+- **MESSAGE_RECEIVED**  
+  Emitted when a message is delivered to the registered handler.
+
+- **ERROR**  
+  Emitted on:
+  - immediate send rejection (e.g., `send(...)` returned `false`)
+  - invalid message fields
+  - missing handler
+  - queue overflow or block timeout
+  - decode errors
+  - transport or socket failures
 
 ---
 
@@ -124,7 +133,9 @@ Middleware must be bounded-memory:
 Rules:
 - `send()` MUST NOT block indefinitely.
 - If `BLOCK` is enabled, max block time is `QUEUE_BLOCK_TIMEOUT_MS`.
-- On enqueue failure or timeout: drop + emit **ERROR**.
+- On enqueue failure or timeout:
+  - message is dropped
+  - **ERROR** event MUST be emitted
 
 ---
 
@@ -174,13 +185,24 @@ Requirements:
 - One `MessagingPort` instance per container bound to its local `NODE_ID`.
 - UDP socket binds to `UDP_PORT` and receives JSON datagrams.
 
-Validation (required):
-- `receiver` argument must equal `message.receiver` (otherwise drop + ERROR).
-- `message.sender` must equal local `NODE_ID` (otherwise drop + ERROR).
+**Validation (required):**
+- `receiver` argument must equal `message.receiver`  
+  → otherwise: drop + **ERROR**
+- `message.sender` must equal local `NODE_ID`  
+  → otherwise: drop + **ERROR**
+- Inbound UDP datagrams addressed to a different `receiver` than the local node  
+  → MUST be dropped + **ERROR**
 
 ---
 
-## 11. Configuration Keys
+## 12. Error Handling
+
+Errors are **observable but non-fatal**:
+- Middleware MUST NOT crash on malformed input or network failures.
+- Errors affect only the dropped message.
+---
+
+## 12. Configuration Keys
 
 ### Required
 - `MW_MODE`: `virtual` | `udp-docker`
@@ -204,13 +226,14 @@ Validation (required):
 
 ---
 
-## 12. Compliance Checklist (Refactor Guardrails)
+## 13. Compliance Checklist (Refactor Guardrails)
 
 Refactors must preserve:
 1. API semantics for `MessagingPort`
-2. Message schema: `sender/receiver/messageType/payload/seq`
-3. Best-effort delivery (loss/reorder/dup allowed)
-4. Event emission points: sent/received/error
-5. Numeric NodeId ordering by suffix (not lexicographic)
-6. `virtual` mode crosses a JSON serialization boundary
-7. `udp-docker` resolves `NodeId.value` via Docker DNS hostname + common `UDP_PORT`
+2. Boolean `send()` acceptance semantics
+3. Message schema: `sender/receiver/messageType/payload/seq`
+4. Best-effort delivery (loss/reorder/dup allowed)
+5. Event emission points: sent / received / error
+6. Numeric NodeId ordering by suffix (not lexicographic)
+7. `virtual` mode crosses a JSON serialization boundary
+8. `udp-docker` resolves `NodeId.value` via Docker DNS hostname + common `UDP_PORT`

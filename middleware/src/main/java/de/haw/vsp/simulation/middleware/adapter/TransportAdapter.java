@@ -13,7 +13,13 @@ import java.io.Closeable;
  */
 public interface TransportAdapter extends Closeable {
 
-    /** Send message asynchronously (best-effort). */
+    /**
+     * @return true if the message was accepted/enqueued for asynchronous transmission.
+     *         false if it was dropped immediately (e.g., queue full, unknown address, oversize).
+     *
+     * Note: immediate drops should be communicated via the boolean return.
+     *       Use onError(...) for asynchronous errors (decode failures, inbound queue full, socket errors).
+     */
     boolean send(SimulationMessage message);
 
     /** Register callback for incoming messages delivered by the transport. */

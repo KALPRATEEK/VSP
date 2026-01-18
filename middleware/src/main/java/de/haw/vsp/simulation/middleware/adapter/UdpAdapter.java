@@ -119,33 +119,23 @@ public final class UdpAdapter implements TransportAdapter {
 
     @Override
     public boolean send(SimulationMessage message) {
-        if (message == null) return false;
-
-        NodeId receiver = message.receiver();
-        TransportAddress addr = config.resolve(receiver);
+        TransportAddress addr = config.resolve(message.receiver());
         if (addr == null) {
-            reportError(localNode, receiver, "unknown address (dropped)");
-            return false;
+            return false; // unknown receiver
         }
 
         final byte[] bytes;
         try {
             bytes = serializer.serialize(message);
         } catch (MessageCodecException e) {
-            reportError(localNode, receiver, "serialization failed: " + e.getMessage());
-            return false;
+            return false; // serialization failed
         }
 
         if (bytes.length > MAX_DATAGRAM_BYTES) {
-            reportError(localNode, receiver, "oversized datagram " + bytes.length + " bytes (dropped)");
-            return false;
+            return false; // oversize
         }
 
-        boolean accepted = QueueOps.enqueue(outboundQueue, new OutboundDatagram(receiver, addr, bytes), outboundConfig);
-        if (!accepted) {
-            reportError(localNode, receiver, "outbound queue full (dropped)");
-        }
-        return accepted;
+        return QueueOps.enqueue(outboundQueue, new OutboundDatagram(message.receiver(), addr, bytes), outboundConfig); // false if outbound queue full
     }
 
     private void sendLoop() {
@@ -192,6 +182,10 @@ public final class UdpAdapter implements TransportAdapter {
                     msg = deserializer.deserialize(data);
                 } catch (MessageCodecException e) {
                     reportError(localNode, null, "decode error from " + packet.getSocketAddress() + ": " + e.getMessage());
+                    continue;
+                }
+                if (!msg.receiver().equals(localNode)) {
+                    reportError(localNode, msg.sender(), "misaddressed message");
                     continue;
                 }
 
