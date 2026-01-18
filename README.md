@@ -16,6 +16,6 @@
 | 10.12.2025 – 23:59 Uhr | Rodrigo            | Submitted |
 | 17.12.2025 – 23:59 Uhr | Prateek            | Submitted |
 | 07.01.2026 – 23:59 Uhr | Mario              | Submitted |
-| 14.01.2026 – 23:59 Uhr | Elias              |           |
+| 14.01.2026 – 23:59 Uhr | Elias              | Submitted |
 
 
