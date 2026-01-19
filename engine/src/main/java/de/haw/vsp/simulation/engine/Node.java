@@ -25,10 +25,10 @@ public interface Node {
      * Called for each incoming message.
      *
      * The node delegates message processing to its algorithm instance.
+     * The node uses its internal context for algorithm interactions.
      *
-     * @param context the node context for algorithm interactions
      * @param message the received message
      */
-    void onMessage(NodeContext context, SimulationMessage message);
+    void onMessage(SimulationMessage message);
 }
 

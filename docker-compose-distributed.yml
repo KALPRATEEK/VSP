@@ -1,0 +1,130 @@
+version: '3.8'
+
+# Multi-container Docker Compose for distributed simulation
+# This setup runs each simulation node in a separate container with real UDP networking
+#
+# Usage:
+#   docker-compose -f docker-compose-distributed.yml up --build
+#
+# Environment variables for customization:
+#   NODE_COUNT: Number of nodes (default: 5)
+#   UDP_PORT: UDP port for node communication (default: 9000)
+
+services:
+  # Backend API server (REST + WebSocket)
+  # Runs in virtual mode, manages simulations
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vsp-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - MW_MODE=virtual
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - vsp-network
+
+  # Simulation Node 0
+  node-0:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+    container_name: vsp-node-0
+    hostname: node-0
+    environment:
+      - MW_MODE=udp-docker
+      - NODE_ID=node-0
+      - UDP_PORT=9000
+      - HOST_TEMPLATE={ID}
+      - NODE_COUNT=5
+    networks:
+      - vsp-network
+    depends_on:
+      - backend
+
+  # Simulation Node 1
+  node-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+    container_name: vsp-node-1
+    hostname: node-1
+    environment:
+      - MW_MODE=udp-docker
+      - NODE_ID=node-1
+      - UDP_PORT=9000
+      - HOST_TEMPLATE={ID}
+      - NODE_COUNT=5
+    networks:
+      - vsp-network
+    depends_on:
+      - backend
+
+  # Simulation Node 2
+  node-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+    container_name: vsp-node-2
+    hostname: node-2
+    environment:
+      - MW_MODE=udp-docker
+      - NODE_ID=node-2
+      - UDP_PORT=9000
+      - HOST_TEMPLATE={ID}
+      - NODE_COUNT=5
+    networks:
+      - vsp-network
+    depends_on:
+      - backend
+
+  # Simulation Node 3
+  node-3:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+    container_name: vsp-node-3
+    hostname: node-3
+    environment:
+      - MW_MODE=udp-docker
+      - NODE_ID=node-3
+      - UDP_PORT=9000
+      - HOST_TEMPLATE={ID}
+      - NODE_COUNT=5
+    networks:
+      - vsp-network
+    depends_on:
+      - backend
+
+  # Simulation Node 4
+  node-4:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+    container_name: vsp-node-4
+    hostname: node-4
+    environment:
+      - MW_MODE=udp-docker
+      - NODE_ID=node-4
+      - UDP_PORT=9000
+      - HOST_TEMPLATE={ID}
+      - NODE_COUNT=5
+    networks:
+      - vsp-network
+    depends_on:
+      - backend
+
+networks:
+  vsp-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

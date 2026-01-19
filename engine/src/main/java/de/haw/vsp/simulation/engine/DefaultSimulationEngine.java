@@ -9,7 +9,6 @@ import de.haw.vsp.simulation.core.SimulationEventPublisher;
 import de.haw.vsp.simulation.core.SimulationParameters;
 import de.haw.vsp.simulation.middleware.MessagingPort;
 import de.haw.vsp.simulation.middleware.EventPublisherAware;
-import de.haw.vsp.simulation.middleware.MessagingPorts;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -52,10 +51,14 @@ public class DefaultSimulationEngine implements SimulationEngine {
     private final AtomicLong currentStep;
 
     /**
-     * Creates a new simulation engine with an in-memory messaging port.
+     * Creates a new simulation engine with a messaging port based on environment configuration.
+     * 
+     * The messaging port mode is determined by the MW_MODE environment variable:
+     * - "virtual" (default): In-memory messaging for development and testing
+     * - "udp-docker": Real UDP networking across Docker containers
      */
     public DefaultSimulationEngine() {
-        this(MessagingPorts.virtual());
+        this(MessagingPortFactory.create());
     }
 
     /**
@@ -110,9 +113,9 @@ public class DefaultSimulationEngine implements SimulationEngine {
             // Create node
             SimulationNode node = new SimulationNode(nodeId, neighbors, algorithm, nodeContext);
 
-            // Register message handler
+            // Register message handler (middleware MessageHandler expects only SimulationMessage)
             final SimulationNode finalNode = node;
-            messagingPort.registerHandler(nodeId, msg -> finalNode.onMessage(nodeContext, msg));
+            messagingPort.registerHandler(nodeId, finalNode::onMessage);
 
             newNodes.put(nodeId, node);
         }
@@ -158,9 +161,9 @@ public class DefaultSimulationEngine implements SimulationEngine {
                 NodeAlgorithm algorithm = new FloodingLeaderElectionAlgorithm();
                 SimulationNode node = new SimulationNode(nodeId, neighbors, algorithm, nodeContext);
 
-                // Register message handler for the new node
+                // Register message handler for the new node (middleware MessageHandler expects only SimulationMessage)
                 final SimulationNode finalNode = node;
-                messagingPort.registerHandler(nodeId, msg -> finalNode.onMessage(nodeContext, msg));
+                messagingPort.registerHandler(nodeId, finalNode::onMessage);
 
                 newNodes.put(nodeId, node);
             }

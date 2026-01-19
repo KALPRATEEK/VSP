@@ -1,0 +1,53 @@
+# Dockerfile for distributed simulation nodes
+# Each container runs ONE simulation node with UDP networking
+
+# Build Stage
+FROM eclipse-temurin:17-jdk-alpine AS build
+WORKDIR /app
+
+# Copy all Maven files
+COPY pom.xml .
+COPY core/pom.xml core/
+COPY middleware/pom.xml middleware/
+COPY engine/pom.xml engine/
+COPY control/pom.xml control/
+
+# Copy source code
+COPY core/src core/src
+COPY middleware/src middleware/src
+COPY engine/src engine/src
+COPY control/src control/src
+
+# Build the application
+RUN apk add --no-cache maven && \
+    mvn clean package -DskipTests -B
+
+# Runtime Stage
+FROM eclipse-temurin:17-jre-alpine
+WORKDIR /app
+
+# Install utilities for health checks and debugging
+RUN apk add --no-cache wget bash
+
+# Copy the built JARs (we need engine and dependencies)
+COPY --from=build /app/engine/target/*.jar engine.jar
+COPY --from=build /app/core/target/*.jar libs/core.jar
+COPY --from=build /app/middleware/target/*.jar libs/middleware.jar
+
+# Expose UDP port for node communication
+EXPOSE 9000/udp
+
+# Health check (simple check that the process is running)
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD ps aux | grep java || exit 1
+
+# Environment variables (overridden by docker-compose)
+ENV MW_MODE=udp-docker
+ENV UDP_PORT=9000
+ENV NODE_ID=node-0
+
+# Start the simulation node
+# Note: This is a simplified startup. In production, you'd have a proper
+# node application that listens for simulation commands.
+# For now, this container just keeps the middleware ready.
+ENTRYPOINT ["sh", "-c", "echo 'Node ${NODE_ID} ready in ${MW_MODE} mode on port ${UDP_PORT}' && tail -f /dev/null"]

@@ -3,7 +3,8 @@ package de.haw.vsp.simulation.engine;
 import de.haw.vsp.simulation.core.NetworkConfig;
 import de.haw.vsp.simulation.core.NodeId;
 import de.haw.vsp.simulation.core.TopologyType;
-import de.haw.vsp.simulation.middleware.inmemory.InMemoryMessagingPort;
+import de.haw.vsp.simulation.middleware.MessagingPort;
+import de.haw.vsp.simulation.middleware.MessagingPorts;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -23,7 +24,7 @@ class SimulationNodeMessageBufferingTest {
     void shouldBufferAndProcessMessagesArrivingBeforeAlgorithmInitialization() {
         // Create a simple 2-node line topology
         NetworkConfig config = new NetworkConfig(2, TopologyType.LINE);
-        InMemoryMessagingPort messagingPort = new InMemoryMessagingPort();
+        MessagingPort messagingPort = MessagingPorts.virtual();
         DefaultSimulationEngine engine = new DefaultSimulationEngine(messagingPort);
 
         // Initialize the engine (creates nodes but doesn't start them)
@@ -51,12 +52,12 @@ class SimulationNodeMessageBufferingTest {
     @DisplayName("should process buffered messages in order after initialization")
     void shouldProcessBufferedMessagesInOrderAfterInitialization() {
         // Create nodes manually to test buffering behavior
-        NodeId nodeId1 = new NodeId("1");
-        NodeId nodeId2 = new NodeId("2");
+        NodeId nodeId1 = new NodeId("node-1");
+        NodeId nodeId2 = new NodeId("node-2");
         Set<NodeId> neighbors1 = Set.of(nodeId2);
         Set<NodeId> neighbors2 = Set.of(nodeId1);
         
-        InMemoryMessagingPort messagingPort = new InMemoryMessagingPort();
+        MessagingPort messagingPort = MessagingPorts.virtual();
         
         SimulationNodeContext context1 = new SimulationNodeContext(nodeId1, neighbors1, messagingPort);
         SimulationNodeContext context2 = new SimulationNodeContext(nodeId2, neighbors2, messagingPort);
@@ -67,9 +68,9 @@ class SimulationNodeMessageBufferingTest {
         SimulationNode node1 = new SimulationNode(nodeId1, neighbors1, algorithm1, context1);
         SimulationNode node2 = new SimulationNode(nodeId2, neighbors2, algorithm2, context2);
 
-// Register handlers (middleware uses core SimulationMessage directly)
-        messagingPort.registerHandler(nodeId1, msg -> node1.onMessage(context1, msg));
-        messagingPort.registerHandler(nodeId2, msg -> node2.onMessage(context2, msg));
+        // Register handlers (middleware MessageHandler expects only SimulationMessage)
+        messagingPort.registerHandler(nodeId1, node1::onMessage);
+        messagingPort.registerHandler(nodeId2, node2::onMessage);
         
         // Mark nodes as started (allows message reception)
         node1.markAsStarted();
@@ -87,13 +88,12 @@ class SimulationNodeMessageBufferingTest {
         node2.onStart();
         
         // Verify Node 2 received and processed the message from Node 1
-        // Since Node 1 has ID "1" and Node 2 has ID "2", Node 2 should update to Node 1 as leader
-        // Actually wait - "2" > "1" lexicographically, so Node 2 should keep itself as leader
-        // But the message from Node 1 should have been processed (not lost)
+        // Since Node 1 has ID "node-1" and Node 2 has ID "node-2", we need to compare numerically
+        // node-1 has numeric suffix 1, node-2 has numeric suffix 2, so node-2 > node-1
         assertNotNull(algorithm2.getCurrentLeaderId());
         
         // The important thing is that the message was not lost - Node 2 should have processed it
-        // Since "2" > "1", Node 2 should remain as its own leader, but the message was processed
+        // Since node-2 > node-1 (comparing numeric suffixes), Node 2 should remain as its own leader
         assertEquals(nodeId2, algorithm2.getCurrentLeaderId());
     }
 }
