@@ -5,7 +5,7 @@ import de.haw.vsp.simulation.core.SimulationMessage;
 import de.haw.vsp.simulation.middleware.MessagingPort;
 
 import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.function.Consumer;
 
 /**
  * Default implementation of NodeContext.
@@ -27,6 +27,7 @@ public class SimulationNodeContext implements NodeContext {
     private final NodeId nodeId;
     private final Set<NodeId> neighbors;
     private final MessagingPort messagingPort;
+    private final Consumer<SimulationMessage> messageCountCallback;
 
     /**
      * Creates a new simulation node context.
@@ -37,6 +38,20 @@ public class SimulationNodeContext implements NodeContext {
      * @throws IllegalArgumentException if any parameter is null
      */
     public SimulationNodeContext(NodeId nodeId, Set<NodeId> neighbors, MessagingPort messagingPort) {
+        this(nodeId, neighbors, messagingPort, null);
+    }
+
+    /**
+     * Creates a new simulation node context with message count callback.
+     *
+     * @param nodeId                the ID of the current node
+     * @param neighbors             the set of neighboring node IDs (immutable)
+     * @param messagingPort         the messaging port for communication
+     * @param messageCountCallback  callback to invoke when a message is sent (may be null)
+     * @throws IllegalArgumentException if nodeId, neighbors, or messagingPort is null
+     */
+    public SimulationNodeContext(NodeId nodeId, Set<NodeId> neighbors, MessagingPort messagingPort, 
+                                 Consumer<SimulationMessage> messageCountCallback) {
         if (nodeId == null) {
             throw new IllegalArgumentException("nodeId must not be null");
         }
@@ -50,6 +65,7 @@ public class SimulationNodeContext implements NodeContext {
         this.nodeId = nodeId;
         this.neighbors = Set.copyOf(neighbors);
         this.messagingPort = messagingPort;
+        this.messageCountCallback = messageCountCallback;
     }
 
     @Override
@@ -76,6 +92,11 @@ public class SimulationNodeContext implements NodeContext {
         //de.haw.vsp.simulation.middleware.SimulationMessage middlewareMessage = toMiddlewareMessage(message);
 
         messagingPort.send(target, message);
+        
+        // Notify callback that a message was sent
+        if (messageCountCallback != null) {
+            messageCountCallback.accept(message);
+        }
     }
 
     @Override
@@ -94,6 +115,13 @@ public class SimulationNodeContext implements NodeContext {
         //de.haw.vsp.simulation.middleware.SimulationMessage middlewareMessage = toMiddlewareMessage(message);
 
         messagingPort.broadcast(targets, message);
+        
+        // Notify callback for each message sent in broadcast
+        if (messageCountCallback != null) {
+            for (int i = 0; i < targets.size(); i++) {
+                messageCountCallback.accept(message);
+            }
+        }
     }
 
     /**

@@ -103,8 +103,13 @@ public class DefaultSimulationEngine implements SimulationEngine {
             NodeId nodeId = entry.getKey();
             Set<NodeId> neighbors = entry.getValue();
 
-            // Create node context
-            SimulationNodeContext nodeContext = new SimulationNodeContext(nodeId, neighbors, messagingPort);
+            // Create node context with message count callback
+            SimulationNodeContext nodeContext = new SimulationNodeContext(
+                nodeId, 
+                neighbors, 
+                messagingPort,
+                msg -> incrementMessageCount()
+            );
 
             // Create algorithm instance (default to FloodingLeaderElectionAlgorithm for now)
             // Algorithm will be configured later via configureAlgorithm()
@@ -157,7 +162,12 @@ public class DefaultSimulationEngine implements SimulationEngine {
                 NodeId nodeId = entry.getKey();
                 Set<NodeId> neighbors = entry.getValue();
 
-                SimulationNodeContext nodeContext = new SimulationNodeContext(nodeId, neighbors, messagingPort);
+                SimulationNodeContext nodeContext = new SimulationNodeContext(
+                    nodeId, 
+                    neighbors, 
+                    messagingPort,
+                    msg -> incrementMessageCount()
+                );
                 NodeAlgorithm algorithm = new FloodingLeaderElectionAlgorithm();
                 SimulationNode node = new SimulationNode(nodeId, neighbors, algorithm, nodeContext);
 
@@ -424,29 +434,138 @@ public class DefaultSimulationEngine implements SimulationEngine {
     
     /**
      * Executes one simulation step.
-     * In a real implementation, this would trigger algorithm execution on all nodes.
-     * For now, this is a placeholder that allows the simulation to progress.
+     * The actual algorithm execution happens through message passing,
+     * but we use this step to periodically check convergence and update metrics.
      */
     private void executeSimulationStep() {
-        // In a real implementation, this would:
-        // 1. Trigger algorithm execution on all nodes
-        // 2. Process pending messages
-        // 3. Update metrics
-        // For now, we just increment the step counter
-        // The actual algorithm execution happens through message passing
+        // The actual algorithm execution happens asynchronously through message passing.
+        // This method is called periodically to:
+        // 1. Check for convergence
+        // 2. Update leader information
+        // 3. Publish events
+        
+        // Check convergence every 10 steps to avoid excessive computation
+        if (currentStep.get() % 10 == 0) {
+            checkConvergence();
+        }
+    }
+    
+    /**
+     * Checks if the algorithm has converged and updates metrics accordingly.
+     * Publishes a LEADER_ELECTED event if a leader is detected for the first time.
+     */
+    private void checkConvergence() {
+        if (nodes.isEmpty()) {
+            return;
+        }
+        
+        // Collect leader IDs from all nodes
+        Set<String> leaderIds = new HashSet<>();
+        for (SimulationNode node : nodes.values()) {
+            NodeAlgorithm algorithm = getNodeAlgorithm(node);
+            if (algorithm instanceof FloodingLeaderElectionAlgorithm) {
+                FloodingLeaderElectionAlgorithm floodingAlgorithm = (FloodingLeaderElectionAlgorithm) algorithm;
+                NodeId currentLeader = floodingAlgorithm.getCurrentLeaderId();
+                if (currentLeader != null) {
+                    leaderIds.add(currentLeader.value());
+                }
+            }
+        }
+        
+        // Check for convergence: all nodes must agree on the same leader
+        if (leaderIds.size() == 1) {
+            String newLeaderId = leaderIds.iterator().next();
+            
+            // Check if this is a new leader (first detection)
+            boolean isNewLeader = !converged.get() || !newLeaderId.equals(this.leaderId);
+            
+            // Update convergence state
+            this.leaderId = newLeaderId;
+            this.converged.set(true);
+            
+            // Publish event only on first leader detection
+            if (isNewLeader) {
+                publishEvent(SimulationEvent.withoutPeer(
+                        System.currentTimeMillis(),
+                        EventType.LEADER_ELECTED,
+                        this.leaderId,
+                        "Leader elected: " + this.leaderId
+                ));
+            }
+        } else if (!leaderIds.isEmpty() && leaderIds.size() > 1) {
+            // Multiple different leaders - not yet converged
+            // Reset convergence if we were previously converged
+            if (converged.get()) {
+                this.converged.set(false);
+                this.leaderId = null;
+            }
+        }
     }
     
     /**
      * Finalizes metrics before stopping the simulation.
+     * Determines the elected leader and checks for convergence.
      */
     private void finalizeMetrics() {
-        // Determine leader (simplified - in real implementation, query algorithm state)
-        // For now, we'll leave leaderId as null or set it based on algorithm state
-        // This should be implemented by querying the algorithm for the elected leader
+        if (nodes.isEmpty()) {
+            converged.set(false);
+            leaderId = null;
+            return;
+        }
         
-        // Check convergence (simplified)
-        // In a real implementation, this would check if all nodes have converged
-        converged.set(true); // Simplified - assume converged when stopped
+        // Collect leader IDs from all nodes
+        Set<String> leaderIds = new HashSet<>();
+        for (SimulationNode node : nodes.values()) {
+            NodeAlgorithm algorithm = getNodeAlgorithm(node);
+            if (algorithm instanceof FloodingLeaderElectionAlgorithm) {
+                FloodingLeaderElectionAlgorithm floodingAlgorithm = (FloodingLeaderElectionAlgorithm) algorithm;
+                NodeId currentLeader = floodingAlgorithm.getCurrentLeaderId();
+                if (currentLeader != null) {
+                    leaderIds.add(currentLeader.value());
+                }
+            }
+        }
+        
+        // Check for convergence: all nodes must agree on the same leader
+        if (leaderIds.size() == 1) {
+            // All nodes agree on one leader - converged
+            this.leaderId = leaderIds.iterator().next();
+            this.converged.set(true);
+            
+            // Publish leader elected event
+            publishEvent(SimulationEvent.withoutPeer(
+                    System.currentTimeMillis(),
+                    EventType.LEADER_ELECTED,
+                    this.leaderId,
+                    "Leader elected: " + this.leaderId
+            ));
+        } else if (leaderIds.isEmpty()) {
+            // No nodes have elected a leader yet
+            this.leaderId = null;
+            this.converged.set(false);
+        } else {
+            // Multiple different leaders - not yet converged
+            this.leaderId = null;
+            this.converged.set(false);
+        }
+    }
+    
+    /**
+     * Extracts the NodeAlgorithm from a SimulationNode using reflection.
+     * This is needed because SimulationNode doesn't expose the algorithm directly.
+     *
+     * @param node the simulation node
+     * @return the node's algorithm, or null if extraction fails
+     */
+    private NodeAlgorithm getNodeAlgorithm(SimulationNode node) {
+        try {
+            java.lang.reflect.Field algorithmField = SimulationNode.class.getDeclaredField("algorithm");
+            algorithmField.setAccessible(true);
+            return (NodeAlgorithm) algorithmField.get(node);
+        } catch (Exception e) {
+            // If reflection fails, return null
+            return null;
+        }
     }
     
     /**
