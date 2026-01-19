@@ -19,15 +19,22 @@
             <groupId>de.haw.vsp</groupId>
             <artifactId>core</artifactId>
         </dependency>
+
         <dependency>
             <groupId>de.haw.vsp</groupId>
             <artifactId>engine</artifactId>
         </dependency>
 
-        <!-- Spring Boot Web -->
+        <!-- Spring Boot Web (REST) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Spring Boot WebSocket (FEHLTE) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
         </dependency>
 
         <!-- Actuator -->
