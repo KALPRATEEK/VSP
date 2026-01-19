@@ -70,20 +70,17 @@ public class SimulationNode implements Node {
     }
 
     @Override
-    public void onMessage(NodeContext context, SimulationMessage message) {
+    public void onMessage(SimulationMessage message) {
         if (!started) {
             throw new IllegalStateException(
                     "onStart() must be called before onMessage() for node " + nodeId
             );
         }
-        if (context == null) {
-            throw new IllegalArgumentException("context must not be null");
-        }
         if (message == null) {
             throw new IllegalArgumentException("message must not be null");
         }
 
-        algorithm.onMessage(context, message);
+        algorithm.onMessage(nodeContext, message);
     }
 
     /**

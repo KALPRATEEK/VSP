@@ -165,7 +165,7 @@ class SimulationNodeTest {
 
             IllegalStateException exception = assertThrows(
                     IllegalStateException.class,
-                    () -> node.onMessage(context, message)
+                    () -> node.onMessage(message)
             );
             assertTrue(exception.getMessage().contains("onStart() must be called before onMessage()"));
             assertTrue(exception.getMessage().contains(nodeId.toString()));
@@ -190,7 +190,7 @@ class SimulationNodeTest {
                     null
             );
 
-            node.onMessage(context, message);
+            node.onMessage(message);
 
             assertEquals(1, algorithm.onMessageCalls);
             assertEquals(message, algorithm.lastMessage);
@@ -218,32 +218,11 @@ class SimulationNodeTest {
                     null
             );
 
-            node.onMessage(context, message1);
-            node.onMessage(context, message2);
+            node.onMessage(message1);
+            node.onMessage(message2);
 
             assertEquals(2, algorithm.onMessageCalls);
             assertEquals(message2, algorithm.lastMessage);
-        }
-
-        @Test
-        @DisplayName("should reject null context in onMessage")
-        void shouldRejectNullContextInOnMessage() {
-            SimulationNode node = new SimulationNode(nodeId, neighbors, algorithm, context);
-            node.onStart();
-
-            SimulationMessage message = new SimulationMessage(
-                    new NodeId("node-2"),
-                    nodeId,
-                    "TEST",
-                    null,
-                    null
-            );
-
-            IllegalArgumentException exception = assertThrows(
-                    IllegalArgumentException.class,
-                    () -> node.onMessage(null, message)
-            );
-            assertTrue(exception.getMessage().contains("context must not be null"));
         }
 
         @Test
@@ -254,7 +233,7 @@ class SimulationNodeTest {
 
             IllegalArgumentException exception = assertThrows(
                     IllegalArgumentException.class,
-                    () -> node.onMessage(context, null)
+                    () -> node.onMessage(null)
             );
             assertTrue(exception.getMessage().contains("message must not be null"));
         }
