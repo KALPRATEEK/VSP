@@ -243,7 +243,7 @@ class FloodingLeaderElectionAlgorithmTest {
                     nodeId,
                     "LEADER_ANNOUNCEMENT",
                     123, // Invalid payload (not a String)
-                    null
+                    1L
             );
             algorithm.onMessage(context, msg);
 
@@ -582,7 +582,7 @@ class FloodingLeaderElectionAlgorithmTest {
                         target,
                         message.messageType(),
                         message.payload(),
-                        null
+                        message.seq()
                 ));
             }
         }

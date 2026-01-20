@@ -2,13 +2,19 @@ package de.haw.vsp.simulation.control;
 
 import de.haw.vsp.simulation.core.NetworkConfig;
 import de.haw.vsp.simulation.core.SimulationId;
+import de.haw.vsp.simulation.core.SimulationEventBus;
 import de.haw.vsp.simulation.core.TopologyType;
+import de.haw.vsp.simulation.engine.DockerNodeOrchestrator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for {@link DefaultSimulationControl}.
@@ -25,7 +31,9 @@ class DefaultSimulationControlTest {
 
     @BeforeEach
     void setUp() {
-        control = new DefaultSimulationControl();
+        DockerNodeOrchestrator mockOrchestrator = mock(DockerNodeOrchestrator.class);
+        Map<SimulationId, SimulationEventBus> eventAggregationMap = new ConcurrentHashMap<>();
+        control = new DefaultSimulationControl(mockOrchestrator, eventAggregationMap);
     }
 
     @Nested

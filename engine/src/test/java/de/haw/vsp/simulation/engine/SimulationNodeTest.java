@@ -208,14 +208,14 @@ class SimulationNodeTest {
                     nodeId,
                     "TEST1",
                     "payload1",
-                    null
+                    1L
             );
             SimulationMessage message2 = new SimulationMessage(
                     new NodeId("node-3"),
                     nodeId,
                     "TEST2",
                     "payload2",
-                    null
+                    2L
             );
 
             node.onMessage(message1);

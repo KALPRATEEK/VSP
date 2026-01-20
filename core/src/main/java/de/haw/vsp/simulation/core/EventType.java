@@ -14,11 +14,13 @@ package de.haw.vsp.simulation.core;
  * - STATE_CHANGED: A node changed its internal state
  * - LEADER_ELECTED: A leader was elected in the algorithm
  * - ERROR: An error occurred during simulation execution
+ * - METRICS_UPDATE: Periodic metrics update from a node (distributed mode)
  */
 public enum EventType {
     MESSAGE_SENT,
     MESSAGE_RECEIVED,
     STATE_CHANGED,
     LEADER_ELECTED,
-    ERROR
+    ERROR,
+    METRICS_UPDATE
 }

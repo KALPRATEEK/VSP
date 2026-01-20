@@ -5,6 +5,7 @@ import de.haw.vsp.simulation.core.SimulationId;
 import de.haw.vsp.simulation.core.SimulationParameters;
 import de.haw.vsp.simulation.core.TopologyType;
 import de.haw.vsp.simulation.engine.DefaultSimulationEngine;
+import de.haw.vsp.simulation.engine.DockerNodeOrchestrator;
 import de.haw.vsp.simulation.engine.SimulationEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -13,8 +14,10 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 
 /**
  * Unit tests for {@link DefaultSimulationControl#selectAlgorithm(SimulationId, String)}.
@@ -31,7 +34,8 @@ class DefaultSimulationControlSelectAlgorithmTest {
 
     @BeforeEach
     void setUp() {
-        control = new DefaultSimulationControl();
+        DockerNodeOrchestrator mockOrchestrator = mock(DockerNodeOrchestrator.class);
+        control = new DefaultSimulationControl(mockOrchestrator, new ConcurrentHashMap<>());
         // Initialize a network first
         NetworkConfig config = new NetworkConfig(3, TopologyType.RING);
         simulationId = control.initializeNetwork(config);

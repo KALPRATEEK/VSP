@@ -29,25 +29,28 @@ WORKDIR /app
 # Install utilities for health checks and debugging
 RUN apk add --no-cache wget bash
 
-# Copy the built JARs (we need engine and dependencies)
-COPY --from=build /app/engine/target/*.jar engine.jar
-COPY --from=build /app/core/target/*.jar libs/core.jar
-COPY --from=build /app/middleware/target/*.jar libs/middleware.jar
+# Copy the built JARs and dependencies
+# Maven dependency plugin copies all runtime dependencies to target/lib
+COPY --from=build /app/core/target/core-1.0.0-SNAPSHOT.jar /app/lib/
+COPY --from=build /app/middleware/target/middleware-1.0.0-SNAPSHOT.jar /app/lib/
+COPY --from=build /app/engine/target/engine-1.0.0-SNAPSHOT.jar /app/engine.jar
+COPY --from=build /app/engine/target/lib/*.jar /app/lib/
 
 # Expose UDP port for node communication
 EXPOSE 9000/udp
+# Expose HTTP port for control API and health checks
+EXPOSE 8080
 
-# Health check (simple check that the process is running)
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD ps aux | grep java || exit 1
+# Health check (checks Spring Boot application readiness via HTTP endpoint)
+HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/node/health || exit 1
 
 # Environment variables (overridden by docker-compose)
 ENV MW_MODE=udp-docker
 ENV UDP_PORT=9000
 ENV NODE_ID=node-0
 
-# Start the simulation node
-# Note: This is a simplified startup. In production, you'd have a proper
-# node application that listens for simulation commands.
-# For now, this container just keeps the middleware ready.
-ENTRYPOINT ["sh", "-c", "echo 'Node ${NODE_ID} ready in ${MW_MODE} mode on port ${UDP_PORT}' && tail -f /dev/null"]
+# Start the simulation node with classpath
+# NodeApplication is the main class in engine.jar
+ENTRYPOINT ["java", "-cp", "/app/engine.jar:/app/lib/*", "de.haw.vsp.simulation.engine.NodeApplication"]
+

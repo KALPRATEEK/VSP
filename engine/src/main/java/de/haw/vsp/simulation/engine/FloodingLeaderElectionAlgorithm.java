@@ -3,6 +3,8 @@ package de.haw.vsp.simulation.engine;
 import de.haw.vsp.simulation.core.NodeId;
 import de.haw.vsp.simulation.core.SimulationMessage;
 
+import java.util.function.Consumer;
+
 /**
  * Flooding-based leader election algorithm.
  *
@@ -31,12 +33,22 @@ public class FloodingLeaderElectionAlgorithm implements NodeAlgorithm {
 
     private NodeId currentLeaderId;
     private boolean converged;
+    private Consumer<NodeId> onLeaderChanged;
 
     /**
      * Creates a new flooding leader election algorithm instance.
      */
     public FloodingLeaderElectionAlgorithm() {
         this.converged = false;
+    }
+
+    /**
+     * Sets a callback to be invoked when the leader changes.
+     *
+     * @param callback callback function accepting the new leader ID
+     */
+    public void setOnLeaderChanged(Consumer<NodeId> callback) {
+        this.onLeaderChanged = callback;
     }
 
     @Override
@@ -77,6 +89,12 @@ public class FloodingLeaderElectionAlgorithm implements NodeAlgorithm {
             // Found a better leader - update and propagate
             currentLeaderId = announcedLeaderId;
             converged = false;
+
+            // Notify callback that leader changed
+            if (onLeaderChanged != null) {
+                onLeaderChanged.accept(currentLeaderId);
+            }
+
             broadcastLeader(context, currentLeaderId);
         }
         // If announced leader is lower or equal, ignore (already have better or equal leader)

@@ -1,16 +1,20 @@
 package de.haw.vsp.simulation.control;
 
 import de.haw.vsp.simulation.core.*;
+import de.haw.vsp.simulation.engine.DockerNodeOrchestrator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.*;
 
 @DisplayName("DefaultSimulationControl - registerVisualizationListener")
@@ -22,7 +26,9 @@ class DefaultSimulationControlRegisterVisualizationListenerTest {
 
     @BeforeEach
     void setUp() {
-        control = new DefaultSimulationControl();
+        DockerNodeOrchestrator mockOrchestrator = mock(DockerNodeOrchestrator.class);
+        Map<SimulationId, SimulationEventBus> eventAggregationMap = new ConcurrentHashMap<>();
+        control = new DefaultSimulationControl(mockOrchestrator, eventAggregationMap);
         networkConfig = new NetworkConfig(3, TopologyType.RING);
         simulationId = control.initializeNetwork(networkConfig);
     }

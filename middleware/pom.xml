@@ -23,6 +23,12 @@
             <artifactId>core</artifactId>
         </dependency>
 
+        <!-- SLF4J API for logging -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+
         <!-- Concurrent library -->
         <dependency>
             <groupId>concurrent</groupId>

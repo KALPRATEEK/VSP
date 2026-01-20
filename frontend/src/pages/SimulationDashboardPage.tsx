@@ -4,6 +4,9 @@ import { simulationApi } from "../api/simulationApi";
 import { SimulationVisualizationView } from "../views/SimulationVisualizationView";
 import { SimulationControlPanel } from "../views/SimulationControlPanel";
 import { MetricsPanel } from "../views/MetricsPanel";
+import { SaveConfigPanel } from "../views/SaveConfigPanel";
+import { ExportDataPanel } from "../views/ExportDataPanel";
+import { LogsPanel } from "../views/LogsPanel";
 
 export function SimulationDashboardPage() {
     const { id } = useParams();
@@ -87,6 +90,12 @@ export function SimulationDashboardPage() {
                             onStop={() => navigate("/")}
                         />
                         <MetricsPanel
+                            simulationId={id}
+                            active
+                        />
+                        <SaveConfigPanel simulationId={id} />
+                        <ExportDataPanel simulationId={id} />
+                        <LogsPanel
                             simulationId={id}
                             active
                         />

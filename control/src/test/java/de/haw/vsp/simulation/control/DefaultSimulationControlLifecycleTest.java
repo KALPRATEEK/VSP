@@ -5,8 +5,10 @@ import de.haw.vsp.simulation.core.NetworkConfig;
 import de.haw.vsp.simulation.core.SimulationId;
 import de.haw.vsp.simulation.core.SimulationParameters;
 import de.haw.vsp.simulation.core.TopologyType;
+import de.haw.vsp.simulation.core.SimulationEventBus;
 import de.haw.vsp.simulation.engine.DefaultSimulationEngine;
 import de.haw.vsp.simulation.engine.SimulationEngine;
+import de.haw.vsp.simulation.engine.DockerNodeOrchestrator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -14,8 +16,10 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 
 /**
  * Unit tests for simulation lifecycle methods in DefaultSimulationControl.
@@ -34,7 +38,9 @@ class DefaultSimulationControlLifecycleTest {
 
     @BeforeEach
     void setUp() {
-        control = new DefaultSimulationControl();
+        DockerNodeOrchestrator mockOrchestrator = mock(DockerNodeOrchestrator.class);
+        Map<SimulationId, SimulationEventBus> eventAggregationMap = new ConcurrentHashMap<>();
+        control = new DefaultSimulationControl(mockOrchestrator, eventAggregationMap);
         NetworkConfig config = new NetworkConfig(3, TopologyType.RING);
         simulationId = control.initializeNetwork(config);
         control.selectAlgorithm(simulationId, "flooding-leader-election");

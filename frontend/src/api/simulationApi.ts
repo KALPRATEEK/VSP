@@ -107,4 +107,34 @@ export const simulationApi = {
 
         return httpRequest<string[]>(() => fetch(url));
     },
+
+    /* =========================================================
+       Save/Load/Export (UC-08, UC-09)
+       ========================================================= */
+
+    async loadConfig(config: SimulationConfig): Promise<SimulationId> {
+        return httpRequest<SimulationId>(() =>
+            fetch("/api/simulations/load", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(config),
+            })
+        );
+    },
+
+    async exportRunData(
+        simulationId: SimulationId,
+        format: "JSON" | "CSV"
+    ): Promise<Blob> {
+        const response = await fetch(
+            `/api/simulations/${simulationId}/export?format=${format}`
+        );
+
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(`Export failed: ${text}`);
+        }
+
+        return response.blob();
+    },
 };

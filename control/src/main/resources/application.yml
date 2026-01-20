@@ -5,3 +5,13 @@ spring:
   application:
     name: distributed-algorithm-simulator
 
+# Simulation Mode Configuration
+# Possible values: "virtual" (in-memory) or "distributed" (Docker containers)
+simulation:
+  mode: ${SIMULATION_MODE:virtual}
+
+# Docker Configuration (for distributed mode)
+docker:
+  network: ${DOCKER_NETWORK:vsp-network}
+  node-image: ${NODE_IMAGE:vsp-node:latest}
+  backend-url: ${BACKEND_URL:http://host.docker.internal:8080}

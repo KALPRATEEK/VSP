@@ -3,8 +3,9 @@ package de.haw.vsp.simulation.control;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import de.haw.vsp.simulation.core.*;
-import de.haw.vsp.simulation.engine.DefaultSimulationEngine;
+import de.haw.vsp.simulation.engine.DockerNodeOrchestrator;
 import de.haw.vsp.simulation.engine.SimulationEngine;
+import de.haw.vsp.simulation.engine.SimulationEngineFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -12,16 +13,15 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 
-import org.springframework.stereotype.Service;
-
 /**
  * Default implementation of SimulationControl.
  *
  * Manages multiple simulation instances and provides a facade for UI interactions.
  * Each simulation is identified by a unique SimulationId.
+ *
+ * Supports both virtual (single-process) and distributed (Docker) execution modes
+ * via SimulationEngineFactory based on SIMULATION_MODE environment variable.
  */
-
-@Service
 public class DefaultSimulationControl implements SimulationControl {
 
     private final Map<SimulationId, SimulationEngine> simulations;
@@ -32,10 +32,19 @@ public class DefaultSimulationControl implements SimulationControl {
     private final Map<SimulationId, String> algorithmIds;
     private final Map<SimulationId, SimulationParameters> simulationParameters;
 
+    private final DockerNodeOrchestrator dockerOrchestrator;
+    private final Map<SimulationId, SimulationEventBus> eventAggregationMap;
+
     /**
      * Creates a new simulation control instance.
+     *
+     * @param dockerOrchestrator Docker orchestrator for distributed mode (autowired by Spring)
+     * @param eventAggregationMap Map for event aggregation (autowired by Spring)
      */
-    public DefaultSimulationControl() {
+    public DefaultSimulationControl(
+        DockerNodeOrchestrator dockerOrchestrator,
+        Map<SimulationId, SimulationEventBus> eventAggregationMap
+    ) {
         this.simulations = new ConcurrentHashMap<>();
         this.eventStreams = new ConcurrentHashMap<>();
         this.leaderIds = new ConcurrentHashMap<>();
@@ -43,6 +52,8 @@ public class DefaultSimulationControl implements SimulationControl {
         this.networkConfigs = new ConcurrentHashMap<>();
         this.algorithmIds = new ConcurrentHashMap<>();
         this.simulationParameters = new ConcurrentHashMap<>();
+        this.dockerOrchestrator = dockerOrchestrator;
+        this.eventAggregationMap = eventAggregationMap;
     }
 
     @Override
@@ -51,13 +62,33 @@ public class DefaultSimulationControl implements SimulationControl {
             throw new IllegalArgumentException("config must not be null");
         }
 
-        SimulationId simulationId = SimulationId.generate();
-        SimulationEngine engine = new DefaultSimulationEngine();
-        engine.createEngineAndNodes(config);
-
-        // Set up event publisher to capture events
+        // Set up event bus
         InMemorySimulationEventBus eventBus = new InMemorySimulationEventBus();
+
+        // Create engine using factory (supports both virtual and distributed modes)
+        SimulationEngine engine = SimulationEngineFactory.create(
+            SimulationEngineFactory.isDistributedMode() ? "distributed" : "virtual",
+            dockerOrchestrator,
+            eventBus
+        );
+
+        // Create nodes - this generates the SimulationId inside the engine
+        engine.createEngineAndNodes(config);
         engine.setEventPublisher(eventBus);
+
+        // Get the actual SimulationId from the engine (especially important for distributed mode)
+        SimulationId simulationId;
+        if (engine instanceof de.haw.vsp.simulation.engine.DistributedSimulationEngine) {
+            simulationId = ((de.haw.vsp.simulation.engine.DistributedSimulationEngine) engine).getSimulationId();
+        } else if (engine instanceof de.haw.vsp.simulation.engine.DefaultSimulationEngine) {
+            // For virtual mode, generate a new ID
+            simulationId = SimulationId.generate();
+        } else {
+            throw new IllegalStateException("Unknown engine type: " + engine.getClass().getName());
+        }
+
+        // NOW register event bus with the correct SimulationId (AFTER engine initialization)
+        eventAggregationMap.put(simulationId, eventBus);
 
         // Subscribe to events to build event stream
         eventBus.subscribe(EventType.LEADER_ELECTED, event -> {
@@ -197,6 +228,8 @@ public class DefaultSimulationControl implements SimulationControl {
         networkConfigs.remove(simulationId);
         algorithmIds.remove(simulationId);
         simulationParameters.remove(simulationId);
+        // Also remove from event aggregation map to prevent memory leak
+        eventAggregationMap.remove(simulationId);
     }
 
     @Override
