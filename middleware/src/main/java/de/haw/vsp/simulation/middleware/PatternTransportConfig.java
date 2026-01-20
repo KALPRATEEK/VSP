@@ -1,6 +1,8 @@
 package de.haw.vsp.simulation.middleware;
 
 import de.haw.vsp.simulation.core.NodeId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Locale;
 import java.util.Objects;
@@ -10,13 +12,15 @@ import java.util.Objects;
  *
  * Typical Docker/K8s pattern:
  *  - host = "node" + nodeId
- *  - port = 9000 (same inside every container)
+ *  - port = 9000 (same for all containers)
  *
  * Template supports placeholder "{ID}".
  * Example: new PatternTransportConfig("node{ID}", 9000)
  */
 public final class PatternTransportConfig implements TransportConfig {
 
+    private static final Logger LOG = LoggerFactory.getLogger(PatternTransportConfig.class);
+    
     public static final String PLACEHOLDER = "{ID}";
 
     private final String hostTemplate;
@@ -53,6 +57,7 @@ public final class PatternTransportConfig implements TransportConfig {
         if (lowerCaseHost) {
             host = host.toLowerCase(Locale.ROOT);
         }
+        
         return new TransportAddress(host, port);
     }
 

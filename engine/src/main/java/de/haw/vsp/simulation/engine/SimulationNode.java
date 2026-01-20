@@ -93,6 +93,15 @@ public class SimulationNode implements Node {
     }
 
     /**
+     * Returns the algorithm instance.
+     *
+     * @return the node algorithm
+     */
+    public NodeAlgorithm getAlgorithm() {
+        return algorithm;
+    }
+
+    /**
      * Returns the set of neighbor IDs.
      *
      * @return immutable set of neighboring node IDs

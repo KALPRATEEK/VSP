@@ -44,6 +44,13 @@ public class FloodingLeaderElectionAlgorithm implements NodeAlgorithm {
         // Initialize leader to own ID
         this.currentLeaderId = context.self();
 
+        // Add small random delay before broadcasting to avoid UDP congestion at startup
+        try {
+            Thread.sleep(100 + (int)(Math.random() * 200)); // Random 100-300ms delay
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
         // Broadcast own ID to all neighbors
         broadcastLeader(context, currentLeaderId);
     }
