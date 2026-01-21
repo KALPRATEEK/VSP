@@ -210,7 +210,7 @@ export const DistributedDashboard: React.FC = () => {
           <div className="metrics-container card">
             <MetricsPanel 
            simulationId={simulationId}
-           active={simulationRunning}
+            active={!paused}
             />
           </div>
         )}
