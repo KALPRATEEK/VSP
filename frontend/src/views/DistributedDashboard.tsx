@@ -209,10 +209,8 @@ export const DistributedDashboard: React.FC = () => {
         {metrics && (
           <div className="metrics-container card">
             <MetricsPanel 
-              messagesSent={metrics.totalMessagesSent}
-              messagesReceived={metrics.totalMessagesReceived}
-              activeNodes={metrics.nodeCount}
-              consensusAchieved={metrics.hasConsensus}
+           simulationId={simulationId}
+           active={simulationRunning}
             />
           </div>
         )}
