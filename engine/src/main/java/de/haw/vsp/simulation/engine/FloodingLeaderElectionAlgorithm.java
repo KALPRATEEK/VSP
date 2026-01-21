@@ -23,14 +23,18 @@ import de.haw.vsp.simulation.core.SimulationMessage;
  *   <li>Algorithm converges when no node updates its leader anymore</li>
  *   <li>In a connected graph: leaderId = max(NodeId) across all nodes</li>
  *   <li>Exactly one leader is elected</li>
+ *   <li>Convergence is detected after 5 seconds without leader change</li>
+ *   <li>Once converged, the algorithm stops sending messages</li>
  * </ul>
  */
 public class FloodingLeaderElectionAlgorithm implements NodeAlgorithm {
 
     private static final String MESSAGE_TYPE_LEADER_ANNOUNCEMENT = "LEADER_ANNOUNCEMENT";
+    private static final long CONVERGENCE_TIMEOUT_MS = 5000; // Consider converged after 5 seconds without leader change
 
     private NodeId currentLeaderId;
     private boolean converged;
+    private long lastLeaderChangeTimeMs;
 
     /**
      * Creates a new flooding leader election algorithm instance.
@@ -43,6 +47,8 @@ public class FloodingLeaderElectionAlgorithm implements NodeAlgorithm {
     public void onStart(NodeContext context) {
         // Initialize leader to own ID
         this.currentLeaderId = context.self();
+        this.converged = false;
+        this.lastLeaderChangeTimeMs = System.currentTimeMillis();
 
         // Add small random delay before broadcasting to avoid UDP congestion at startup
         try {
@@ -84,7 +90,14 @@ public class FloodingLeaderElectionAlgorithm implements NodeAlgorithm {
             // Found a better leader - update and propagate
             currentLeaderId = announcedLeaderId;
             converged = false;
+            lastLeaderChangeTimeMs = System.currentTimeMillis();
             broadcastLeader(context, currentLeaderId);
+        } else {
+            // No leader change - check if we've converged
+            long timeSinceLastChange = System.currentTimeMillis() - lastLeaderChangeTimeMs;
+            if (timeSinceLastChange >= CONVERGENCE_TIMEOUT_MS && !converged) {
+                converged = true;
+            }
         }
         // If announced leader is lower or equal, ignore (already have better or equal leader)
     }
@@ -122,10 +135,18 @@ public class FloodingLeaderElectionAlgorithm implements NodeAlgorithm {
 
     /**
      * Returns whether the algorithm has converged.
+     * Checks if sufficient time has passed since the last leader change.
      *
      * @return true if converged, false otherwise
      */
     public boolean isConverged() {
+        // Check convergence based on time since last change
+        if (!converged) {
+            long timeSinceLastChange = System.currentTimeMillis() - lastLeaderChangeTimeMs;
+            if (timeSinceLastChange >= CONVERGENCE_TIMEOUT_MS) {
+                converged = true;
+            }
+        }
         return converged;
     }
 }

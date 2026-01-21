@@ -162,8 +162,9 @@ public class StandaloneNodeApplication {
         LOG.info("Standalone node {} is running...", nodeId);
         LOG.info("Leader Election Algorithm is active and processing messages...");
         
-        // Keep the application running and periodically re-broadcast leader to ensure convergence
+        // Keep the application running and periodically re-broadcast leader until convergence
         // Use exponential backoff: fast initially, slower over time
+        // Re-broadcasts stop automatically once the algorithm has converged
         int stepCount = 0;
         try {
             while (running.get()) {
@@ -187,21 +188,30 @@ public class StandaloneNodeApplication {
                         interval = 10; // After 120s: stable
                     }
                     
-                    // Re-broadcast current leader at calculated interval
+                    // Re-broadcast current leader at calculated interval ONLY if not converged
                     if (stepCount % interval == 0 && node != null) {
-                        LOG.debug("Step {} (interval={}s) - Re-broadcasting current leader for node {}", 
-                                 stepCount, interval, nodeId);
                         FloodingLeaderElectionAlgorithm algorithm = (FloodingLeaderElectionAlgorithm) node.getAlgorithm();
                         if (algorithm != null && algorithm.getCurrentLeaderId() != null) {
-                            // Re-broadcast current leader to all neighbors
-                            for (NodeId neighbor : node.getNeighbors()) {
-                                nodeContext.send(neighbor, new SimulationMessage(
-                                    nodeId,
-                                    neighbor,
-                                    "LEADER_ANNOUNCEMENT",
-                                    algorithm.getCurrentLeaderId().value(),
-                                    null
-                                ));
+                            // Check if algorithm has converged
+                            if (!algorithm.isConverged()) {
+                                LOG.debug("Step {} (interval={}s) - Re-broadcasting current leader for node {} (not yet converged)", 
+                                         stepCount, interval, nodeId);
+                                // Re-broadcast current leader to all neighbors
+                                for (NodeId neighbor : node.getNeighbors()) {
+                                    nodeContext.send(neighbor, new SimulationMessage(
+                                        nodeId,
+                                        neighbor,
+                                        "LEADER_ANNOUNCEMENT",
+                                        algorithm.getCurrentLeaderId().value(),
+                                        null
+                                    ));
+                                }
+                            } else {
+                                // Log convergence status periodically (every 60 seconds)
+                                if (stepCount % 60 == 0) {
+                                    LOG.info("Node {} has CONVERGED. Leader = {}. No more re-broadcasts needed.", 
+                                            nodeId, algorithm.getCurrentLeaderId());
+                                }
                             }
                         }
                     }

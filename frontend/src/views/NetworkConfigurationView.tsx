@@ -145,9 +145,6 @@ export function NetworkConfigurationView() {
             <option value="flooding-leader-election">
               Flooding Leader Election
             </option>
-            <option value="bully-election">
-              Bully Algorithm
-            </option>
           </select>
         </div>
 

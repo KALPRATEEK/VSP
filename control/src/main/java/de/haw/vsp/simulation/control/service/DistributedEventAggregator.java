@@ -126,6 +126,22 @@ public class DistributedEventAggregator {
         boolean hasConsensus = consensusLeader != null && 
             leaderVotes.get(consensusLeader) == nodes.size();
         
+        // SC6: Validate that the elected leader has the maximum NodeId
+        String sc6Warning = null;
+        if (hasConsensus && consensusLeader != null && !nodes.isEmpty()) {
+            String maxNodeId = nodes.keySet().stream()
+                .max(String::compareTo)
+                .orElse(null);
+            
+            if (maxNodeId != null && !consensusLeader.equals(maxNodeId)) {
+                sc6Warning = String.format(
+                    "⚠️ SC6 VIOLATION: Elected leader '%s' is NOT the maximum NodeId! Expected: '%s'",
+                    consensusLeader, maxNodeId
+                );
+                LOG.warn(sc6Warning);
+            }
+        }
+        
         Map<String, Object> metrics = new HashMap<>();
         metrics.put("nodeCount", nodes.size());
         metrics.put("totalMessagesSent", totalMessagesSent);
@@ -133,6 +149,10 @@ public class DistributedEventAggregator {
         metrics.put("consensusLeader", consensusLeader);
         metrics.put("hasConsensus", hasConsensus);
         metrics.put("leaderVotes", leaderVotes);
+        metrics.put("nodes", nodes);
+        if (sc6Warning != null) {
+            metrics.put("sc6Warning", sc6Warning);
+        }
         
         return metrics;
     }

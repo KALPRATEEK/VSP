@@ -60,7 +60,7 @@ public class DockerContainerService {
             File workDir = new File(workspaceDir).exists() ? new File(workspaceDir) : new File(projectRoot);
             
             ProcessBuilder pb = new ProcessBuilder(
-                "docker-compose", "-f", composeFile, "up", "-d"
+                "docker-compose", "-f", composeFile, "up", "-d", "--build"
             );
             pb.directory(workDir);
             pb.redirectErrorStream(true);

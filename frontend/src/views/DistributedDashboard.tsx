@@ -20,6 +20,7 @@ interface Metrics {
   hasConsensus: boolean;
   leaderVotes: Record<string, number>;
   nodes: Record<string, NodeStatus>;
+  sc6Warning?: string;
 }
 
 interface VisualizationData {
@@ -205,6 +206,25 @@ export const DistributedDashboard: React.FC = () => {
           </div>
         </div>
 
+        {/* SC6 Warning */}
+        {metrics?.sc6Warning && (
+          <div className="card" style={{ 
+            backgroundColor: '#fff3cd', 
+            border: '2px solid #ffc107',
+            padding: '20px',
+            marginBottom: '20px'
+          }}>
+            <h3 style={{ color: '#856404', marginTop: 0 }}>⚠️ Algorithm Correctness Warning</h3>
+            <p style={{ color: '#856404', margin: '10px 0', fontSize: '16px', fontWeight: 'bold' }}>
+              {metrics.sc6Warning}
+            </p>
+            <p style={{ color: '#856404', margin: '5px 0', fontSize: '14px' }}>
+              The Flooding Leader Election algorithm should elect the node with the highest ID as the leader. 
+              This indicates a potential bug in the algorithm implementation or message delivery issues.
+            </p>
+          </div>
+        )}
+
         {/* Metrics Panel */}
         {metrics && (
           <div className="metrics-container card">
@@ -261,24 +281,6 @@ export const DistributedDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Docker Info */}
-        <div className="docker-info card">
-          <h2>🐳 Docker Commands</h2>
-          <div className="command-list">
-            <div className="command-item">
-              <code>docker ps | findstr vsp-node</code>
-              <span className="command-desc">Show all running nodes</span>
-            </div>
-            <div className="command-item">
-              <code>docker logs vsp-node-0 -f</code>
-              <span className="command-desc">Follow logs from node-0</span>
-            </div>
-            <div className="command-item">
-              <code>docker logs vsp-node-0 --tail 50</code>
-              <span className="command-desc">Last 50 log lines from node-0</span>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

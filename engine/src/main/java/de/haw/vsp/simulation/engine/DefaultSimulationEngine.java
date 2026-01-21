@@ -9,6 +9,8 @@ import de.haw.vsp.simulation.core.SimulationEventPublisher;
 import de.haw.vsp.simulation.core.SimulationParameters;
 import de.haw.vsp.simulation.middleware.MessagingPort;
 import de.haw.vsp.simulation.middleware.EventPublisherAware;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -28,6 +30,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class DefaultSimulationEngine implements SimulationEngine {
 
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultSimulationEngine.class);
     private static final String SYSTEM_NODE_ID = "system";
 
     private final MessagingPort messagingPort;
@@ -475,6 +478,27 @@ public class DefaultSimulationEngine implements SimulationEngine {
         // Check for convergence: all nodes must agree on the same leader
         if (leaderIds.size() == 1) {
             String newLeaderId = leaderIds.iterator().next();
+            
+            // SC6: Validate that the elected leader has the maximum NodeId
+            String maxNodeId = nodes.keySet().stream()
+                .map(NodeId::value)
+                .max(String::compareTo)
+                .orElse(null);
+            
+            if (maxNodeId != null && !newLeaderId.equals(maxNodeId)) {
+                // WARNING: Elected leader is NOT the node with maximum ID!
+                String warningMsg = String.format(
+                    "⚠️ SC6 VIOLATION: Elected leader '%s' is NOT the maximum NodeId! Expected: '%s'",
+                    newLeaderId, maxNodeId
+                );
+                LOG.warn(warningMsg);
+                publishEvent(SimulationEvent.withoutPeer(
+                        System.currentTimeMillis(),
+                        EventType.STATE_CHANGED,
+                        SYSTEM_NODE_ID,
+                        warningMsg
+                ));
+            }
             
             // Check if this is a new leader (first detection)
             boolean isNewLeader = !converged.get() || !newLeaderId.equals(this.leaderId);
