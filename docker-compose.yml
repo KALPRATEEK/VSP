@@ -8,6 +8,13 @@ services:
       - "8080:8080"
     environment:
       - SPRING_PROFILES_ACTIVE=docker
+      - DISTRIBUTED_MODE_ENABLED=true
+      - PROJECT_ROOT=/workspace
+    volumes:
+      # Docker socket for managing containers
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Mount project directory for build context (Dockerfiles, source code)
+      - .:/workspace
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
       interval: 30s

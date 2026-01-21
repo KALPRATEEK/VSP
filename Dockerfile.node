@@ -27,27 +27,26 @@ FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 
 # Install utilities for health checks and debugging
-RUN apk add --no-cache wget bash
+RUN apk add --no-cache wget bash curl
 
-# Copy the built JARs (we need engine and dependencies)
-COPY --from=build /app/engine/target/*.jar engine.jar
-COPY --from=build /app/core/target/*.jar libs/core.jar
-COPY --from=build /app/middleware/target/*.jar libs/middleware.jar
+# Copy the fat JAR with all dependencies included
+COPY --from=build /app/engine/target/standalone-node.jar /app/app.jar
 
 # Expose UDP port for node communication
 EXPOSE 9000/udp
 
-# Health check (simple check that the process is running)
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD ps aux | grep java || exit 1
+# Health check (check that the Java process is running)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD pgrep java || exit 1
 
 # Environment variables (overridden by docker-compose)
 ENV MW_MODE=udp-docker
 ENV UDP_PORT=9000
 ENV NODE_ID=node-0
+ENV NODE_COUNT=5
+ENV HOST_TEMPLATE={ID}
+ENV BACKEND_URL=http://vsp-backend:8080
 
-# Start the simulation node
-# Note: This is a simplified startup. In production, you'd have a proper
-# node application that listens for simulation commands.
-# For now, this container just keeps the middleware ready.
-ENTRYPOINT ["sh", "-c", "echo 'Node ${NODE_ID} ready in ${MW_MODE} mode on port ${UDP_PORT}' && tail -f /dev/null"]
+# Start the standalone node application
+# Fat JAR includes all dependencies, so simple java -jar works
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]

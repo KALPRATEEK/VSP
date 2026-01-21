@@ -23,8 +23,14 @@ RUN apk add --no-cache maven && \
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 
+# Install Docker CLI and Docker Compose for container management
+RUN apk add --no-cache docker-cli docker-cli-compose
+
 # Copy the built JAR from control module
 COPY --from=build /app/control/target/*.jar app.jar
+
+# Create directory for generated docker-compose files
+RUN mkdir -p /app/generated
 
 # Expose port
 EXPOSE 8080

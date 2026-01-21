@@ -1,30 +1,28 @@
-export class ApiError extends Error {
-  public readonly status?: number;
-
-  constructor(message: string, status?: number) {
-    super(message);
-    this.status = status;
-  }
-}
-
-
 export async function httpRequest<T>(
-  request: () => Promise<Response>
+    request: () => Promise<Response>
 ): Promise<T> {
-  let response: Response;
-
-  try {
-    response = await request();
-  } catch {
-    throw new ApiError("Backend not reachable");
-  }
+  const response = await request();
 
   if (!response.ok) {
-    throw new ApiError(
-      `Request failed with status ${response.status}`,
-      response.status
-    );
+    const errorText = await response.text();
+    throw new Error(errorText || response.statusText);
   }
 
-  return response.json() as Promise<T>;
+  // 204 No Content → kein Body
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  const text = await response.text();
+
+  // leerer Body → void
+  if (!text) {
+    return undefined as T;
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch (e) {
+    throw new Error("Invalid JSON response from server");
+  }
 }

@@ -85,3 +85,19 @@ button.primary:disabled {
   margin-top: 1rem;
 }
 
+.page, .dashboard {
+  max-width: 1200px;
+  margin: auto;
+  padding: 2rem;
+}
+
+.card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+}
+
+.primary { background: #2563eb; color: white; }
+.secondary { background: #e5e7eb; }
+.danger { background: #dc2626; color: white; }

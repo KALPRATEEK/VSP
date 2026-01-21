@@ -140,9 +140,10 @@ public final class EnvTransportConfigs {
 
     private static PatternTransportConfig buildPatternConfig(String hostPatternOrTemplate, int port) {
         String s = Objects.requireNonNull(hostPatternOrTemplate, "hostPatternOrTemplate").trim();
+        
         if (s.isEmpty()) {
             // empty prefix => "{ID}"
-            return new PatternTransportConfig("", port);
+            return new PatternTransportConfig("", port, true);
         }
         if (s.contains(PatternTransportConfig.PLACEHOLDER)) {
             return new PatternTransportConfig(s, port, true);

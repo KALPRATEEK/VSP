@@ -12,12 +12,16 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 
+import org.springframework.stereotype.Service;
+
 /**
  * Default implementation of SimulationControl.
  *
  * Manages multiple simulation instances and provides a facade for UI interactions.
  * Each simulation is identified by a unique SimulationId.
  */
+
+@Service
 public class DefaultSimulationControl implements SimulationControl {
 
     private final Map<SimulationId, SimulationEngine> simulations;
