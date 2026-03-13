@@ -6,12 +6,12 @@
 ## Overview
 
 This project implements a distributed algorithm simulator with support for:
-- ✅ Flooding-based leader election algorithm
-- ✅ Multiple network topologies (ring, line, grid, random)
-- ✅ **Dual execution modes**: Virtual (in-memory) and UDP-Docker (distributed)
-- ✅ REST API for simulation control
-- ✅ Real-time visualization
-- ✅ Metrics and observability
+- Flooding-based leader election algorithm
+-  Multiple network topologies (ring, line, grid, random)
+-  **Dual execution modes**: Virtual (in-memory) and UDP-Docker (distributed)
+-  REST API for simulation control
+-  Real-time visualization
+-  Metrics and observability
 
 ## Quick Start
 
